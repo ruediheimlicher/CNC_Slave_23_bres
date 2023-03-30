@@ -270,6 +270,17 @@ volatile uint16_t          timerintervall = TIMERINTERVALL;
 volatile uint16_t          timerintervall_SLOW = 0; // Intervall klein
 volatile uint16_t          timerintervall_FAST = 0; // Intervall gross
 
+uint8_t richtungstatus = 0;
+uint8_t oldrichtungstatus = 0;
+#define AXNEG  0
+#define AYNEG  1
+#define BXNEG  4
+#define BYNEG  5
+
+int16_t lastdax = 0; // letzte Werte fuer schritte x, y. Fuer berechnung gradient
+int16_t lastday = 0;
+
+
 uint16_t errpos = 0;
 // bresenham end
 
@@ -712,6 +723,7 @@ uint8_t  AbschnittLaden_4M(const uint8_t* AbschnittDaten) // 22us
    
    /*
    lcd_gotoxy(0,0);
+   /*
    lcd_putc('A');
    lcd_putint12(StepCounterA);
    lcd_putc(' ');
@@ -742,7 +754,7 @@ uint8_t  AbschnittLaden_4M(const uint8_t* AbschnittDaten) // 22us
          if (StepCounterA > StepCounterD) // A max
          {
             motorstatus |= (1<<COUNT_A);
-            //lcd_putc('A');
+            lcd_putc('A');
          }
          else //A>B A>C D>A
          {
@@ -1781,8 +1793,8 @@ void AbschnittEndVonMotor(const uint8_t derstatus) // 0 - 3 fuer A - D   52 us
    OSZIBLO;
    if (abschnittnummer==endposition) // Serie fertig
    {  
-      //lcd_gotoxy(0,3);
-      //lcd_putc('E');
+      lcd_gotoxy(0,3);
+      lcd_putc('E');
       ringbufferstatus = 0;
       anschlagstatus=0;
       anschlagstatus &= ~(1<< (END_A0 + motor)); // Bit fuer Anschlag Ax zuruecksetzen
@@ -1952,14 +1964,15 @@ uint16_t count=0;
       //OSZIBLO;
       //Blinkanzeige
       loopcount0+=1;
-      if (loopcount0==0x4FFF)
+      if (loopcount0==0x8FFF)
       {
          loopcount0=0;
          loopcount1+=1;
          LOOPLEDPORT ^=(1<<LOOPLED);
          PORTD ^= (1<<PORTD6);
          
-   //      lcd_gotoxy(10,3);
+         lcd_gotoxy(18,3);
+         lcd_puthex(loopcount1);
    //      lcd_putint1(richtung);
    //      lcd_putc(' ');
    //      lcd_putint(anschlagcounter);
@@ -2162,7 +2175,7 @@ uint16_t count=0;
                CounterC=0;
                CounterD=0;
                
-               lcd_gotoxy(0,1);
+               lcd_gotoxy(14,0);
                lcd_puts("reset\0");
                //cli();
                //usb_init();
@@ -2406,6 +2419,12 @@ uint16_t count=0;
          ringbufferstatus &= ~(1<<STARTBIT);         
          ladeposition=0;
          AbschnittCounter=0;
+         richtungstatus = 0; // neubeginn, set back
+         oldrichtungstatus = 0;
+         // Abschnitt 0 laden
+         uint8_t l = sizeof(CNCDaten[ladeposition]);
+         uint8_t micro = CNCDaten[ladeposition][26];
+
          // Ersten Abschnitt laden
          for(i=0;i<USB_DATENBREITE;i++)
          {
@@ -2413,6 +2432,11 @@ uint16_t count=0;
          }
 
          uint8_t pos=AbschnittLaden_4M(CNCDaten[0]); 
+         
+         
+         lcd_gotoxy(0,0);
+         lcd_putc('A');
+         lcd_putint(pos);
          ladeposition++;
          if (pos==2) // nur ein Abschnitt
          {
@@ -2546,11 +2570,14 @@ uint16_t count=0;
                // Wenn StepCounterA nach decrement abgelaufen und relevant: next Datenpaket abrufen
                if (StepCounterA == 0 && (motorstatus & (1<< COUNT_A)))    // Motor A ist relevant fuer Stepcount
                {
+                  lcd_gotoxy(0,1);
+                  lcd_puts("A end");
                    //
                   // Begin Ringbuffer-Stuff
                   //if (ringbufferstatus & (1<<ENDBIT))
                   if (abschnittnummer==endposition) // Abschnitt fertig
                   {  
+                     lcd_puts("AA");
                      if (cncstatus & (1<<GO_HOME))
                      {
                         homestatus |= (1<<COUNT_A);
@@ -2576,6 +2603,7 @@ uint16_t count=0;
                   }
                   else 
                   {
+                     lcd_puts("AB");
                      uint8_t aktuellelage=0; // Lage innerhalb der Abschnittserie: Start: 1, Innerhalb: 0, Ende: 2
                      
                      uint8_t aktuelleladeposition=(ladeposition & 0x00FF);
@@ -2661,11 +2689,14 @@ uint16_t count=0;
          
          if (StepCounterB == 0 && (motorstatus & (1<< COUNT_B))) // StepCounterB jetzt abgelaufen, Motor B ist relevant fuer Stepcount 
          {
+            lcd_gotoxy(6,1);
+            lcd_puts("B end");
             //StepCounterA=0;
             //lcd_putc('-');
             // Begin Ringbuffer-Stuff
             if (abschnittnummer==endposition)
             {  
+               lcd_puts("BA");
                if (cncstatus & (1<<GO_HOME))
                {
                   homestatus |= (1<<COUNT_B);
@@ -2691,6 +2722,7 @@ uint16_t count=0;
             }
             else 
             { 
+               lcd_puts("BB");
                uint8_t aktuellelage=0;
                {
                   uint8_t aktuelleladeposition=(ladeposition & 0x00FF);
@@ -2768,13 +2800,15 @@ uint16_t count=0;
          // Wenn StepCounterC abgelaufen und relevant: next Datenpaket abrufen
          if (StepCounterC ==0 && (motorstatus & (1<< COUNT_C)))    // Motor C ist relevant fuer Stepcount 
          {
-            
+            lcd_gotoxy(12,1);
+            lcd_puts("C end");
 //            STEPPERPORT_2 |= (1<<MC_EN);                          // Motor C OFF
             //StepCounterD=0; 
             // Begin Ringbuffer-Stuff
             //if (ringbufferstatus & (1<<ENDBIT))
             if (abschnittnummer==endposition)
             {  
+               lcd_puts("CA");
                if (cncstatus & (1<<GO_HOME))
                {
                homestatus |= (1<<COUNT_C);
@@ -2801,6 +2835,7 @@ uint16_t count=0;
             }
             else 
             { 
+               lcd_puts("CB");
                uint8_t aktuellelage=0; // Lage innerhalb der Abschnittserie: Start: 1, Innerhalb: 0, Ende: 2
                uint8_t aktuelleladeposition=(ladeposition & 0x00FF);
                aktuelleladeposition &= 0x03;
@@ -2880,11 +2915,13 @@ uint16_t count=0;
          
          if (StepCounterD ==0 && (motorstatus & (1<< COUNT_D))) // Motor D ist relevant fuer Stepcount 
          {
-            
+            lcd_gotoxy(16,1);
+            lcd_puts("D end");
             //StepCounterC=0;
             // Begin Ringbuffer-Stuff
             if (abschnittnummer==endposition)
             {  
+               lcd_puts("DA");
                if (cncstatus & (1<<GO_HOME))
                {
                homestatus |= (1<<COUNT_D);
@@ -2908,6 +2945,7 @@ uint16_t count=0;
             }
             else 
             { 
+               lcd_puts("DB");
                uint8_t aktuellelage=0;
                {
                   uint8_t aktuelleladeposition=(ladeposition & 0x00FF);
