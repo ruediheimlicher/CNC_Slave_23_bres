@@ -18,7 +18,7 @@ volatile uint8_t hidstatus=0;
 #define usb_debug_flush_output()
 
 
-// Everything below this point is only intended for usb_serial.c
+// Everything below this point is only intended for usb_// Serial.c
 #ifdef USB_PRIVATE_INCLUDE
 #include <avr/io.h>
 #include <avr/pgmspace.h>

@@ -17,6 +17,7 @@
 #include <inttypes.h>
 #include <avr/wdt.h>
 
+#include "settings.h"
 #include "lcd.c"
 #include "adc.c"
 #include "version.c"
@@ -225,6 +226,52 @@ volatile uint8_t richtung=0;
 
 volatile uint8_t homestatus=0;
 
+// bresenham start
+uint8_t motorsteps = 48;
+uint8_t micro = 1;
+volatile uint8_t           bresenhamstatus=0x00; // relevanter motor, in Abschnittladen:bres gesetzt
+
+volatile uint16_t           bresenham_errAB = 0; // error A,B
+volatile uint16_t           bresenham_e2AB = 0; // check A,B
+
+volatile uint16_t           bresenham_errCD = 0;
+volatile uint16_t           bresenham_e2CD = 0;
+
+volatile uint16_t           StepStartA = 0; // startwert am Anfang des Abschnittes
+volatile uint16_t           StepStartC = 0;
+
+// Seite A
+volatile int16_t xA, yA, tA, dxA, dyA, incxA, incyA, pdxA, pdyA, ddxA, ddyA, deltaslowdirectionA, deltafastdirectionA, errA;
+
+volatile uint16_t deltafastdelayA = 0; // aktueller delay 
+volatile uint16_t bres_delayA = 0; // steps fuer fastdirection
+volatile uint16_t bres_counterA = 0; // zaehler fuer fastdirection
+
+//Seite B
+volatile int16_t xB, yB, tB, dxB, dyB, incxB, incyB, pdxB, pdyB, ddxB, ddyB, deltaslowdirectionB, deltafastdirectionB, errB;
+
+volatile uint16_t deltafastdelayB = 0; // aktueller delay 
+volatile uint16_t bres_delayB = 0; // steps fuer fastdirection
+volatile uint16_t bres_counterB = 0; // zaehler fuer fastdirection
+
+volatile uint16_t          ramptimerintervall = TIMERINTERVALL;
+
+volatile uint8_t           rampstatus=0;
+//volatile uint8_t           RampZeit = RAMPZEIT;
+//volatile uint8_t           RampFaktor = RAMPFAKTOR;
+volatile uint32_t          rampstepstart=0; // Stepcounter am Anfang
+//volatile uint32_t          ramptimercounter=0;  // laufender counter  fuer Rampanpassung
+//volatile uint32_t          //ramptimerdelay = 100;  // Takt fuer Rampanpassung
+uint8_t                    rampschritt = 2;
+volatile uint16_t          rampbreite = 0;  // anzahl Schritte der Ramp. Wird beim Start bestimmt und fuer das Ende verwendet
+
+volatile uint32_t          rampendstep = 0; // Beginn der Endramp. Wird in Abschnittladen bestimmt
+volatile uint16_t          timerintervall = TIMERINTERVALL;
+volatile uint16_t          timerintervall_SLOW = 0; // Intervall klein
+volatile uint16_t          timerintervall_FAST = 0; // Intervall gross
+
+uint16_t errpos = 0;
+// bresenham end
 
 void startTimer2(void)
 {
@@ -551,6 +598,7 @@ uint8_t  AbschnittLaden_4M(const uint8_t* AbschnittDaten) // 22us
 	// Motor B
 	//CounterB=0;
 	STEPPERPORT_1 &= ~(1<<MB_EN);	// Pololu ON
+   
 	dataL=AbschnittDaten[2];
 	dataH=AbschnittDaten[3];
 	//lcd_gotoxy(19,1);
@@ -969,6 +1017,396 @@ uint8_t  AbschnittLaden(const uint8_t* AbschnittDaten)
 }
 
 
+// MARK: mark AbschnittLaden_bres
+uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
+{
+   stopTimer2();
+ //  lcd_gotoxy(15,0);
+ //  lcd_puts("    ");
+   
+   uint8_t returnwert=0;
+
+   /*         
+    Reihenfolge der Daten:
+    0    schritteax lb
+    1    schritteax hb
+    2    schritteay lb
+    3    schritteay hb
+    
+    4    delayax lb
+    5    delayax hb
+    6    delayay lb
+    7    delayay hb
+    
+    8    schrittebx lb
+    9    schrittebx hb
+    10    schritteby lb
+    11    schritteby hb
+    
+    12    delaybx lb
+    13    delaybx hb
+    14    delayby lb
+    15    delayby hb
+    
+    
+    16   (8)    code
+    17   (9)    position // Beschreibung der Lage im Schnittpolygon:first, last, ...
+    18   (10)   indexh     // Nummer des Abschnitts
+    19   (11)   indexl   
+    
+    20     pwm
+    
+    21   motorstatus // relevanter Motor fuer Abschnitt
+    
+    22   zoomfaktor
+    
+    25   steps
+    26   micro
+    
+    */         
+   
+   motorsteps = AbschnittDaten[25];
+   
+   micro = AbschnittDaten[26];
+   
+   uint16_t index = (AbschnittDaten[18] << 8) | AbschnittDaten[19];
+   
+   if (AbschnittDaten[35] == 1)
+   {
+      // Serial.printf("+++ +++ +++ \t\t\t index: %d AbschnittLaden_bres WENDEPUNKT \n",index);
+      rampstatus |=(1<<RAMPOKBIT);
+   }
+
+   
+   
+   // pwm-rate
+   PWM = AbschnittDaten[20];
+   //// Serial.printf("AbschnittLaden_4M steps: %d micro: %d PWM: %d\n",steps,micro,PWM);
+   //// Serial.printf("AbschnittLaden_bres start \n");
+   //**   analogWrite(DC_PWM, PWM);
+   
+   //// Serial.printf("AbschnittLaden_bres AbschnittDaten eingang index: %d\n", index);
+   
+   
+   /*
+   for(uint8_t i=0;i<27;i++) // 5 us ohne printf, 10ms mit printf
+   { 
+      // Serial.printf("%d \t",AbschnittDaten[i]);
+   }
+   // Serial.printf("\n");
+   
+ //  // Serial.printf("AbschnittLaden_4M steps: %d micro: %d\n",motorsteps,micro);
+   
+   //   lage = AbschnittDaten[9]; // Start: 1, innerhalb: 0, Ende: 2
+    */
+   
+   int lage = 0;
+   lage = AbschnittDaten[17]; // Start: 1, innerhalb: 0, Ende: 2
+  // // Serial.printf("******* *********   AbschnittLaden_bres lage: %d\n",lage);
+  // // Serial.printf("AbschnittLaden_bres lage: %d\n",lage);
+   if (lage & 0x01) // erstes Element
+   {
+      returnwert=1;
+   }
+   if (lage & 0x02) // letztes Element
+   {
+      returnwert=2;
+   }
+   
+   richtung=0;
+   
+   // Motor A
+   //digitalWriteFast(MA_EN,LOW); // Pololu ON
+   STEPPERPORT_1 &= ~(1<<MA_EN); // Pololu ON
+   uint8_t dataL=0;
+   uint8_t dataH=0;
+   
+   uint8_t delayL=0;
+   uint8_t delayH=0;
+   
+   dataL=AbschnittDaten[0];
+   dataH=AbschnittDaten[1];
+   
+   //lcd_gotoxy(17,0);
+   int8_t vz = 1;
+   if (dataH & (0x80)) // Bit 7 gesetzt, negative zahl
+   {
+      richtung |= (1<<RICHTUNG_A); // Rueckwarts
+      //digitalWriteFast(MA_RI, LOW); // PIN fuer Treiber stellen
+      STEPPERPORT_1 &= ~(1<< MA_RI); // PIN fuer Treiber stellen
+      vz = -1;
+      //lcd_putc('r');
+   }
+   else 
+   {
+      richtung &= ~(1<<RICHTUNG_A);
+      //digitalWriteFast(MA_RI, HIGH);
+      STEPPERPORT_1 |= (1<< MA_RI);
+      //lcd_putc('v');   // Vorwaerts
+   }
+   
+   dataH &= (0x7F); // bit 8 entfernen
+   StepCounterA = dataL | (dataH << 8);      //    
+
+   int16_t newdax =  StepCounterA * vz;
+   StepCounterA *= micro;
+   StepStartA = StepCounterA;
+      
+   delayL=AbschnittDaten[4];
+   delayH=AbschnittDaten[5];
+   
+   DelayA = delayL | (delayH << 8);
+   
+   CounterA = DelayA;
+   
+   // Motor B
+   //CounterB=0;
+   //digitalWriteFast(MB_EN,LOW);   // Pololu ON
+   STEPPERPORT_1 &= ~(1<<MB_EN);   // Pololu ON
+   dataL=AbschnittDaten[2];
+   dataH=AbschnittDaten[3];
+   //lcd_gotoxy(19,1);
+   vz = 1;
+   if (dataH & (0x80)) // Bit 7 gesetzt, negative zahl
+   {
+      richtung |= (1<<RICHTUNG_B); // Rueckwarts
+      //digitalWriteFast(MB_RI, LOW);      //lcd_putc('r');
+      STEPPERPORT_1 &= ~(1<< MB_RI);
+      vz = -1;
+   }
+   else 
+   {
+      richtung &= ~(1<<RICHTUNG_B);
+      //digitalWriteFast(MB_RI, HIGH);
+      STEPPERPORT_1 |= (1<< MB_RI);
+   }
+   
+   dataH &= (0x7F);
+    
+   StepCounterB = dataL | (dataH <<8);
+   int16_t newday = StepCounterB * vz;
+   
+   StepCounterB *= micro;
+   
+   
+    DelayB = (AbschnittDaten[7]<<8) | AbschnittDaten[6];
+   
+   
+   // Serial.printf("\nAbschnittLaden_bres index: %d StepCounterA  : %d DelayA: %d StepCounterB: %d DelayB: %d\n",index,StepCounterA, DelayA, StepCounterB, DelayB);
+
+   
+   CounterB = DelayB;
+   
+   
+    // Motor C
+   //digitalWriteFast(MC_EN,LOW);    // Pololu ON
+   STEPPERPORT_2 &= ~(1<<MC_EN); // Pololu ON
+   //CounterC=0;
+   dataL=0;
+   dataH=0;
+   
+   delayL=0;
+   delayH=0;
+   
+   dataL=AbschnittDaten[8];
+   dataH=AbschnittDaten[9];
+   //// Serial.printf("AbschnittLaden_4M C datah: %d\n",dataH);
+   //richtung=0;
+   if (dataH & (0x80)) // Bit 7 gesetzt, negative zahl
+   {
+      richtung |= (1<<RICHTUNG_C); // Rueckwarts
+      //digitalWriteFast(MC_RI, LOW);
+      STEPPERPORT_2 &= ~(1<< MC_RI);
+      //// Serial.printf("AbschnittLaden_4M C negativ\n");
+   }
+   else 
+   {
+      richtung &= ~(1<<RICHTUNG_C);
+      //digitalWriteFast(MA_RI, HIGH);
+      STEPPERPORT_2 |= (1<< MC_RI);
+      //// Serial.printf("AbschnittLaden_4M C positiv\n");
+   }
+   
+   dataH &= (0x7F);
+//   StepCounterC = dataH;      // HByte
+//   StepCounterC <<= 8;      // shift 8
+//   StepCounterC += dataL;   // +LByte
+   
+   StepCounterC = dataL | (dataH << 8);
+   StepCounterC  *= micro;
+   
+   StepStartC = StepCounterC;
+   delayL=AbschnittDaten[12];
+   delayH=AbschnittDaten[13];
+   
+//   DelayC = delayH;
+//   DelayC <<=8;
+//   DelayC += delayL;
+   
+   DelayC = delayL | (delayH <<8);
+   
+   CounterC = DelayC;
+
+   // Motor D
+   //digitalWriteFast(MD_EN,LOW);   //CounterD=0;
+   STEPPERPORT_2 &= ~(1<<MD_EN); // Pololu ON
+   dataL=0;
+   dataH=0;
+   
+   delayL = 0;
+   delayH = 0;
+   
+   dataL = AbschnittDaten[10];
+   dataH = AbschnittDaten[11];
+   //// Serial.printf("AbschnittLaden_4M D datah: %d\n",dataH);
+   if (dataH & (0x80)) // Bit 7 gesetzt, negative zahl
+   {
+      richtung |= (1<<RICHTUNG_D); // Rueckwarts
+      //digitalWriteFast(MD_RI, LOW);
+      richtung |= (1<<RICHTUNG_D); // Rueckwarts
+      //// Serial.printf("AbschnittLaden_4M D negativ\n");
+      //lcd_putc('r');
+   }
+   else 
+   {
+      richtung &= ~(1<<RICHTUNG_D);
+      //digitalWriteFast(MD_RI, HIGH);
+      STEPPERPORT_2 |= (1<< MD_RI);
+      //// Serial.printf("AbschnittLaden_4M D positiv\n");
+   }
+   
+   dataH &= (0x7F);
+   
+   StepCounterD = dataL | (dataH << 8); 
+   StepCounterD  *= micro;
+   
+   delayL=AbschnittDaten[14];
+   delayH=AbschnittDaten[15];
+   
+   DelayD = delayL | (delayH <<8);
+   
+   //// Serial.printf("AbschnittLaden_4M StepCounterD: %d DelayD: %d\n",StepCounterD,DelayD);
+   CounterD = DelayD;
+   
+   //  ****
+   //  Bresenham
+   //  ***
+   //// Serial.printf("AbschnittLaden_bres vor bresenham: StepCounterA: %d StepCounterB: %d\n",StepCounterA,StepCounterB);
+   deltafastdirectionA = 0;
+   deltaslowdirectionA = 0;
+   deltafastdirectionB = 0;
+   deltaslowdirectionB = 0;
+   deltafastdelayA = 0;
+   deltafastdelayB = 0;
+
+   // bresenham Seite A
+   
+   // relevanten Motor setzen
+   if (StepCounterA > StepCounterB)
+   {
+      //
+      pdxA = 1;
+      pdyA = 0;
+      ddxA = 1;
+      ddyA = 1;
+      deltaslowdirectionA = StepCounterB;
+      deltafastdirectionA = StepCounterA;
+      deltafastdelayA = DelayA;
+ //     // Serial.printf("AbschnittLaden_bres  A > B\n");
+   }
+   else
+   {
+      //
+      pdxA = 0;
+      pdyA = 1;
+      ddxA = 1;
+      ddyA = 1;
+      deltaslowdirectionA = StepCounterA;
+      deltafastdirectionA = StepCounterB;
+      deltafastdelayA = DelayB;
+ //     // Serial.printf("AbschnittLaden_bres  A < B\n");
+   }
+   // aktuelle Werte einsetzen
+   bres_delayA = deltafastdelayA; // aktueller delay in fastdir
+   bres_counterA = deltafastdirectionA; // aktueller counter fuer steps
+   
+   if(rampstatus & (1<<RAMPOKBIT))
+   {
+      // Serial.printf("AbschnittLaden_bres index: %d set RAMPSTARTBIT\n",index);
+      rampstatus |= (1<<RAMPSTARTBIT);
+      errpos = 0;
+      ramptimerintervall += (ramptimerintervall/4*3);
+      
+      //delayTimer.update(ramptimerintervall);
+   }
+   
+   xA = StepCounterA; // 
+   yA = StepCounterB;
+
+   errA = deltafastdirectionA/2;
+   
+  // // Serial.printf("AbschnittLaden_bres deltafastdirectionA: %d deltaslowdirectionA: %d  deltafastdelayA: %d errA: %d bres_counterA: %d bres_delayA: %d\n",deltafastdirectionA,deltaslowdirectionA, deltafastdelayA,errA,bres_counterA,bres_delayA);
+
+   // bresenham Seite B
+   
+    
+   
+   // relevanten Motor setzen
+   if (StepCounterC > StepCounterD)
+   {
+      //
+      pdxB = 1;
+      pdyB = 0;
+      ddxB = 1;
+      ddyB = 1;
+      deltaslowdirectionB = StepCounterD;
+      deltafastdirectionB = StepCounterC;
+      deltafastdelayB = DelayC;
+      //// Serial.printf("AbschnittLaden_bres  C > D\n");
+   }
+   else
+   {
+      //
+      pdxB = 0;
+      pdyB = 1;
+      ddxB = 1;
+      ddyB = 1;
+      deltaslowdirectionB = StepCounterC;
+      deltafastdirectionB = StepCounterD;
+      deltafastdelayB = DelayD;
+      //// Serial.printf("AbschnittLaden_bres  C < D\n");
+   }
+   // aktuelle Werte einsetzen
+   bres_delayB = deltafastdelayB; // aktueller delay in fastdir
+   bres_counterB = deltafastdirectionB; // aktueller counter fuer steps
+   
+   xB = StepCounterC; // 
+   yB = StepCounterD;
+
+   errB = deltafastdirectionB/2;
+   
+     {
+   
+   timerintervall_FAST = TIMERINTERVALL;
+   //  OSZI_B_LO();
+   }
+   
+   
+   // motorstatus: welcher Motor ist relevant
+   motorstatus = AbschnittDaten[21];
+   
+   // richtung change
+#pragma mark Richtung change
+   
+  // rampstatus |=(1<<RAMPOKBIT);
+
+   
+   startTimer2();
+   
+   //// Serial.printf("\nAbschnittLaden_bres end aktuellelage: %d \n",returnwert);
+     return returnwert;
+ 
+}
 
 
 
