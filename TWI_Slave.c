@@ -259,6 +259,9 @@ volatile uint16_t deltafastdelayB = 0; // aktueller delay
 volatile uint16_t bres_delayB = 0; // steps fuer fastdirection
 volatile uint16_t bres_counterB = 0; // zaehler fuer fastdirection
 
+
+
+
 volatile uint16_t          ramptimerintervall = TIMERINTERVALL;
 
 volatile uint8_t           rampstatus=0;
@@ -512,7 +515,7 @@ ISR (TIMER2_OVF_vect)
             bres_delayB-=1;
          }
          
-         
+      
          
       } 
      
@@ -546,6 +549,7 @@ ISR(TIMER2_COMP_vect) // Schaltet Impuls an SERVOPIN0 aus
 
 uint8_t  AbschnittLaden_4M(const uint8_t* AbschnittDaten) // 22us
 {
+   return 0;
    stopTimer2();
    lcd_gotoxy(15,0);
    lcd_puts("    ");
@@ -1740,7 +1744,8 @@ void gohome(void)
    CNCDaten[1][19] = 1; // indexl
    CNCDaten[1][21] = 1;
    
-   uint8_t pos=AbschnittLaden_4M(CNCDaten[0]); 
+  // uint8_t pos=AbschnittLaden_4M(CNCDaten[0]); 
+   uint8_t pos=AbschnittLaden_bres(CNCDaten[0]); 
    
    richtung |= (1<<RICHTUNG_A ); // horizontaler Anschlag A
    richtung |= (1<<RICHTUNG_C ); // horizontaler Anschlag C
@@ -2078,7 +2083,7 @@ uint16_t count=0;
          
          switch (code)
          {   
-               
+               // MARK: E0              
             case 0xE0: // Man: Alles stoppen
             {
                ringbufferstatus = 0;
@@ -2122,7 +2127,7 @@ uint16_t count=0;
                
             }break;
                
-               
+               // MARK: E2
             case 0xE2: // DC ON_OFF: Temperatur Schneiddraht setzen
             {
                PWM = buffer[20];
@@ -2134,7 +2139,7 @@ uint16_t count=0;
                 
             }break;
                
-               
+               // MARK: E4
             case 0xE4: // Stepperstrom ON_OFF
             {
                
@@ -2156,7 +2161,7 @@ uint16_t count=0;
                
                  
             }break;
-               
+               // MARK: E6
             case 0xE6:  // mousup
             {
                CounterA = 0;
@@ -2174,7 +2179,7 @@ uint16_t count=0;
                AbschnittCounter=0;
                
             }break;
-               
+               // MARK: F1
             case 0xF1: // reset
             {
                uint8_t i=0, k=0;
@@ -2286,7 +2291,7 @@ uint16_t count=0;
 
                }break;
                
-// MARK: mark default
+// MARK: default
             default:
             {
                // Abschnittnummer bestimmen
