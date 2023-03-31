@@ -21,6 +21,9 @@
 #define RAMPOKBIT    7
 #define RAMPSCHRITT  1
 
+#define TIMER_ON           1 // Bit fuer timerfunktion start
+
+
 
 #define DC_PWM              22
 

@@ -16,6 +16,8 @@
 #include <avr/eeprom.h>
 #include <inttypes.h>
 #include <avr/wdt.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "settings.h"
 #include "lcd.c"
@@ -23,6 +25,7 @@
 #include "version.c"
 #include "usb_rawhid.c"
 //#include "ringbuffer.c"
+
 
 // USB
 #define CPU_PRESCALE(n)	(CLKPR = 0x80, CLKPR = (n))
@@ -226,6 +229,8 @@ volatile uint8_t richtung=0;
 
 volatile uint8_t homestatus=0;
 
+volatile uint8_t           timerstatus=0;
+
 // bresenham start
 uint8_t motorsteps = 48;
 uint8_t micro = 1;
@@ -284,8 +289,16 @@ int16_t lastday = 0;
 uint16_t errpos = 0;
 // bresenham end
 
+// https://www.cprogramcoding.com/p/box-sizing-border-box_549.html
+int max(int num1, int num2)
+{
+    return (num1 > num2 ) ? num1 : num2;
+}
+
+
 void startTimer2(void)
 {
+   timerstatus |= (1<<TIMER_ON);
    //timer2
    TCNT2   = 0; 
    //	TCCR2A |= (1 << WGM21);    // Configure timer 2 for CTC mode 
@@ -301,6 +314,7 @@ void startTimer2(void)
 void stopTimer2(void)
 {
    TCCR2B = 0;
+   timerstatus &= ~(1<<TIMER_ON);
 }
 
 void slaveinit(void)
@@ -483,6 +497,26 @@ ISR (TIMER2_OVF_vect)
       if (CounterB) 	CounterB-=1;
       if (CounterC)  CounterC-=1;
       if (CounterD)  CounterD-=1;
+      
+      if (timerstatus & (1<<TIMER_ON))
+      {
+         // OSZI_A_LO(); // 100us
+         
+         if (bres_delayA)
+         {
+            bres_delayA-=1;
+         }
+         
+         if (bres_delayB)
+         {
+            bres_delayB-=1;
+         }
+         
+         
+         
+      } 
+     
+      
       
       if (PWM)
       {
@@ -1464,23 +1498,23 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
              
             if (motor<2) // Stepperport 1
             {
-               lcd_gotoxy(0,2);
+               //lcd_gotoxy(0,2);
                
-               lcd_puts("P1 M");
-               lcd_putint1(motor);
+               //lcd_puts("P1 M");
+               //lcd_putint1(motor);
 
                STEPPERPORT_1 |= (1<<(MA_EN + motor));     // Motor 0 ODER 1 OFF // andere Richtung kommt anschliessend von master
                
                if (anschlagstatus &(1<< END_A0)) // Anschlag von Motor A               
                {
-                  lcd_gotoxy(6,3);
-                  lcd_puts("A0");
+                  //lcd_gotoxy(6,3);
+                  //lcd_puts("A0");
                   StepCounterA=0; 
                   StepCounterB=0; 
                   if (anschlagstatus &(1<< END_B0)) // Anschlag von Motor B, NACH Motor A
                   {
-                     lcd_gotoxy(8,3);
-                     lcd_puts("B0");
+                     //lcd_gotoxy(8,3);
+                     //lcd_puts("B0");
                      //StepCounterB=0; 
                   }
                }
@@ -1492,9 +1526,9 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
             }
             else // Stepperport 2
             {
-               lcd_gotoxy(0,3);
-               lcd_puts("P2 M");
-               lcd_putint1(motor);
+               //lcd_gotoxy(0,3);
+               //lcd_puts("P2 M");
+               //lcd_putint1(motor);
                
 
                STEPPERPORT_2 |= (1<<(MA_EN + motor));     // Motor 2,3 OFF
@@ -1502,14 +1536,14 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
                
                if (anschlagstatus &(1<< END_C0)) // Anschlag von Motor C               
                {
-                  lcd_gotoxy(6,3);
-                  lcd_puts("C0");
+                  //lcd_gotoxy(6,3);
+                  //lcd_puts("C0");
                   StepCounterC=0; 
                   StepCounterD=0;
                   if (anschlagstatus &(1<< END_D0)) // Anschlag von Motor D, NACH Motor C
                   {
-                     lcd_gotoxy(8,3);
-                     lcd_puts("D0");
+                     //lcd_gotoxy(8,3);
+                     //lcd_puts("D0");
                      StepCounterD=0; 
                   }
                }
@@ -1794,7 +1828,7 @@ void AbschnittEndVonMotor(const uint8_t derstatus) // 0 - 3 fuer A - D   52 us
    if (abschnittnummer==endposition) // Serie fertig
    {  
       lcd_gotoxy(0,3);
-      lcd_putc('E');
+       lcd_putc('E');
       ringbufferstatus = 0;
       anschlagstatus=0;
       anschlagstatus &= ~(1<< (END_A0 + motor)); // Bit fuer Anschlag Ax zuruecksetzen
@@ -2431,8 +2465,8 @@ uint16_t count=0;
   //          CNCDaten[0][i]=0;  
          }
 
-         uint8_t pos=AbschnittLaden_4M(CNCDaten[0]); 
-         
+         //uint8_t pos=AbschnittLaden_4M(CNCDaten[0]); 
+         uint8_t pos=AbschnittLaden_bres(CNCDaten[0]); // erster Wert im Ringbuffer
          
          lcd_gotoxy(0,0);
          lcd_putc('A');
@@ -2549,236 +2583,284 @@ uint16_t count=0;
          AnschlagVonMotor(3);
       }
 
-// MARK: Motor A    
+// MARK: Motor A  B  
       
       // Anschlag schon registriert
       // Begin Motor A
       // **************************************
-      // * Motor A *
+      // * Motor A B *
       // **************************************
-   
-      // Es hat noch Steps, CounterA ist abgezaehlt (DelayA bestimmt Impulsabstand fuer Steps), kein Anschlag 
-            if (StepCounterA &&(CounterA == 0) &&(!(anschlagstatus & (1<< END_A0)))) //||(cncstatus & (1<< END_B0)))))//   
+      if (deltafastdirectionA > 0) // Bewegung auf Seite A vorhanden
+      {
+         
+         // Es hat noch Steps, CounterA ist abgezaehlt (DelayA bestimmt Impulsabstand fuer Steps), kein Anschlag 
+         if ((bres_counterA > 0)  && (bres_delayA == 0) &&((!(anschlagstatus & (1<< END_A0))) && (!(anschlagstatus & (1<< END_B0)))) )        
+         {
+            // start ramp
+            
+            if (rampstatus & (1<<RAMPSTARTBIT))
             {
-                cli();
-               // Impuls starten
-               STEPPERPORT_1 &= ~(1<<MA_STEP);   // Impuls an Motor A LO -> ON
-               CounterA = DelayA;                     // CounterA zuruecksetzen fuer neuen Impuls
-               
-               StepCounterA--;
-               
-               // Wenn StepCounterA nach decrement abgelaufen und relevant: next Datenpaket abrufen
-               if (StepCounterA == 0 && (motorstatus & (1<< COUNT_A)))    // Motor A ist relevant fuer Stepcount
+               if (ramptimerintervall > timerintervall_FAST) // noch nicht auf max speed
                {
-                  lcd_gotoxy(0,1);
-                  lcd_puts("A end");
-                   //
-                  // Begin Ringbuffer-Stuff
-                  //if (ringbufferstatus & (1<<ENDBIT))
-                  if (abschnittnummer==endposition) // Abschnitt fertig
-                  {  
-                     lcd_puts("AA");
-                     if (cncstatus & (1<<GO_HOME))
-                     {
-                        homestatus |= (1<<COUNT_A);
-          //              motorstatus |= (1<< COUNT_C);
-                     }
-
-                      cli();
-                     ringbufferstatus = 0;
-                     cncstatus=0;
-                     // home: 
-                     motorstatus &= ~(1<< COUNT_A);
-                     motorstatus=0;
+                  //errarray[errpos++] = ramptimerintervall;
+                  //  Serial.printf("start ramptimerintervall: %d\n",ramptimerintervall);
+                  if(rampstatus & (1<<RAMPOKBIT))
+                  {
+                     ramptimerintervall -= RAMPSCHRITT;
                      
-                     sendbuffer[0]=0xBD;
-                     sendbuffer[5]=abschnittnummer;
-                     sendbuffer[6]=ladeposition;
-                 //    sendbuffer[7]=(ladeposition & 0xFF00) >> 8;
-                     sendbuffer[22] = cncstatus;
+                     //        delayTimer.update(ramptimerintervall);
+                     //rampbreite++;
                      
-                     usb_rawhid_send((void*)sendbuffer, 50);
-                     ladeposition=0;
-                     sei();
+                  }
+                  
+               }
+               else
+               {
+                  //OSZI_B_HI();
+                  //errarray[errpos++] = 1000;
+                  rampstatus &= ~(1<<RAMPSTARTBIT);
+                  rampendstep = rampstepstart - max(StepCounterA, StepCounterB);
+                  rampstatus |= (1<<RAMPENDBIT);
+                  rampstatus |= (1<<RAMPEND0BIT);
+                  //Serial.printf("end rampstepstart: %d rampendstep: %d ramptimerintervall: %d timerintervall: %d\n",rampstepstart,rampendstep, ramptimerintervall,timerintervall);
+                  //Serial.printf("end ramp\n");
+                  rampstatus &= ~(1<<RAMPOKBIT);
+               }
+            }
+            // end ramp
+            
+            //      noInterrupts();
+            //
+            // Aktualisierung Fehlerterm
+            errA -= deltaslowdirectionA;
+            
+            bres_counterA -= 1; // steps abarbeiten
+            
+            if (bres_counterA < 4)
+            {
+               //Serial.printf("bres_counterA: %d xA: %d yA: %d\n",bres_counterA, xA, yA);
+            }
+            if (errA < 0)
+            {
+               //Fehlerterm wieder positiv (>=0) machen
+               errA += deltafastdirectionA;
+               // Schritt in langsame Richtung, Diagonalschritt
+               xA -= ddxA;
+               yA -= ddyA;
+               if (xA)
+               {
+                  if (ddxA && xA)// Motor A soll steppen
+                  {
+                     STEPPERPORT_1 &= ~(1 << MA_STEP);
+                     //digitalWriteFast(MA_STEP,LOW);
+                  }
+               }
+               if (yA)
+               {
+                  if (ddyA && yA)// Motor B soll steppen
+                  {
+                     //digitalWriteFast(MB_STEP,LOW);
+                     STEPPERPORT_1 &= ~(1 << MB_STEP);
+                  }
+               }
+               // Impuls A und B starten
+               //Serial.printf("Motor A diagonal\t");
+            }
+            else 
+            {
+               // Schritt in schnelle Richtung, Parallelschritt
+               if (xA) // noch Schritte da
+               {
+                  xA -= pdxA;
+               }
+               if (yA) 
+               {
+                  yA -= pdyA;
+               }
+               
+               if (xA) // noch Schritte Motor A
+               {
+                  if (pdxA && xA)// Motor A soll steppen
+                  {
+                     STEPPERPORT_1 &= ~(1 << MA_STEP);
+                     //digitalWriteFast(MA_STEP,LOW);
+                  }
+               }
+               if (yA) // noch Schritte Motor B
+               {
+                  if (pdyA && yA)// Motor B soll steppen
+                  {
+                     //digitalWriteFast(MB_STEP,LOW);
+                     STEPPERPORT_1 &= ~(1 << MB_STEP);
+                  }
+               }
+               
+               //Serial.printf("Motor A parallel\t");
+            }
+            bres_delayA = deltafastdelayA;
+            // CounterA zuruecksetzen fuer neuen Impuls
+            
+            
+            // Wenn StepCounterA jetzt nach decrement abgelaufen und relevant: next Datenpaket abrufen
+            if ((bres_counterA == 0 ) )    // relevanter counter abgelaufen
+            {
+               //Serial.printf("Motor AB bres_counterA ist null\n");
+               if ((abschnittnummer==endposition)) // Ablauf fertig
+               {  
+                  //Serial.printf("*** *** *** *** *** *** Motor AB abschnittnummer==endposition xA: %d yA: %d cncstatus: %d\n",xA, yA, cncstatus);
+                  if (cncstatus & (1<<GO_HOME))
+                  {
+                     homestatus |= (1<<COUNT_A);
+                  }
+                  
+                  //        cli();
+                  //Serial.printf("Motor A endpos > BD\n");
+                  ringbufferstatus = 0;
+                  // home: 
+                  motorstatus &= ~(1<< COUNT_A);
+                  motorstatus=0;
+                  
+                  sendbuffer[0]=0xBD;
+                  sendbuffer[5]=abschnittnummer;
+                  sendbuffer[6]=ladeposition;
+                  //    sendbuffer[7]=(ladeposition & 0xFF00) >> 8;
+                  sendbuffer[22] = cncstatus;
+                  //Serial.printf("*** *** *** *** *** BD 1\n");
+                  usb_rawhid_send((void*)sendbuffer, 0);
+                  ladeposition=0;
+                  
+                  //analogWrite(DC_PWM, 0);
+                  
+                  cncstatus=0;
+                  /*
+                   for (uint16_t i=0;i<255;i++)
+                   {
+                   
+                   Serial.printf("%d\t%d \n",i,errarray[i]);
+                   }
+                   */
+                  //      sei();
+               }
+               else 
+               {
+                  uint8_t aktuellelage=0; // Lage innerhalb der Abschnittserie: Start: 1, Innerhalb: 0, Ende: 2
+                  
+                  uint8_t aktuelleladeposition=(ladeposition & 0x00FF); // 8 bit
+                  aktuelleladeposition &= 0x03;
+                  
+                  // aktuellen Abschnitt laden
+                  //_delay_us(5);
+                  
+                  //Serial.printf("axh: %d \t",CNCDaten[aktuelleladeposition][1]);
+                  uint8_t axh = CNCDaten[aktuelleladeposition][1];
+                  //Serial.printf("axh: %d \t",axh);
+                  if (axh < 128)
+                  {
+                     //Serial.printf("richtung x positiv\n");
                   }
                   else 
                   {
-                     lcd_puts("AB");
-                     uint8_t aktuellelage=0; // Lage innerhalb der Abschnittserie: Start: 1, Innerhalb: 0, Ende: 2
-                     
-                     uint8_t aktuelleladeposition=(ladeposition & 0x00FF);
-                     aktuelleladeposition &= 0x03;
-                     
-                     // aktuellen Abschnitt laden
-                      aktuellelage = AbschnittLaden_4M(CNCDaten[aktuelleladeposition]);
-                     if (aktuellelage==2) // war letzter Abschnitt
-                     {
-                        endposition=abschnittnummer; // letzter Abschnitt
-                        
-                        // Neu: letzten Abschnitt melden
-                        sendbuffer[0]=0xD0;
-                        sendbuffer[5]=abschnittnummer;
-                        sendbuffer[6]=ladeposition;
-                        //sendbuffer[7]=(ladeposition & 0xFF00) >> 8;
-                        sendbuffer[22] = cncstatus;
-                        usb_rawhid_send((void*)sendbuffer, 50);
-                        sei();
-                        
-                     }
-                     else
-                     {
-                        // neuen Abschnitt abrufen
-                        sendbuffer[5]=abschnittnummer;
-                        sendbuffer[6]=ladeposition;
-                        //sendbuffer[7]=(ladeposition & 0xFF00) >> 8;
-                        sendbuffer[22] = cncstatus;
-                        // TODO : ev.  A0 setzen
-                        sendbuffer[0]=0xA1;
-                        usb_rawhid_send((void*)sendbuffer, 50);
-                     }
-                     
-                     ladeposition++;
-                     
-                       if (aktuellelage==2)
-                     {
-                        //ringbufferstatus |= (1<<ENDBIT);
-                     }
-                     AbschnittCounter++;
-                     
+                     //Serial.printf("richtung x positiv\n");
                   }
-               }
-               
-            }
-            else
-            {
-                STEPPERPORT_1 |= (1<<MA_STEP);               // Impuls an Motor A HI -> OFF
-                               
-                if (StepCounterA ==0)                     // Keine Steps mehr fuer Motor A
-                {    
-                    
-                   STEPPERPORT_1 |= (1<<MA_EN);                     // Motor A OFF
-                }
-            }
-               sei();
-        
-       /*     
-            // Halt-Pin
-        else if (!(richtung & (1<<RICHTUNG_A)))
-        {
-            DelayA = 0;
-            StepCounterA = 0;
-            STEPPERPORT_1 |= (1<<MA_STEP);     // StepCounterA beenden
-            STEPPERPORT_1 |= (1<<MA_EN);
-            CounterA=0;
-            
-        }
-        */
-      // MARK: mark Motor B
-      // **************************************
-      // * Motor B *
-      // **************************************
-      
-      if (StepCounterB && (CounterB == 0)&&(!(anschlagstatus & (1<< END_B0))))
-      {
-         cli();
-         //lcd_putc('B');
-         
-         STEPPERPORT_1 &= ~(1<<MB_STEP);               // Impuls an Motor B LO ON
-         CounterB = DelayB;
-         StepCounterB--;
-         
-         if (StepCounterB == 0 && (motorstatus & (1<< COUNT_B))) // StepCounterB jetzt abgelaufen, Motor B ist relevant fuer Stepcount 
-         {
-            lcd_gotoxy(6,1);
-            lcd_puts("B end");
-            //StepCounterA=0;
-            //lcd_putc('-');
-            // Begin Ringbuffer-Stuff
-            if (abschnittnummer==endposition)
-            {  
-               lcd_puts("BA");
-               if (cncstatus & (1<<GO_HOME))
-               {
-                  homestatus |= (1<<COUNT_B);
-            //      motorstatus |= (1<< COUNT_C);
-               }
-
-               cli();
-   
-               ringbufferstatus = 0;
-               cncstatus=0;
-               motorstatus &= ~(1<< COUNT_B);
-               
-               motorstatus=0;
-               
-               sendbuffer[0]=0xBD;
-               
-               sendbuffer[5]=abschnittnummer;
-               sendbuffer[6]=ladeposition;
-               sendbuffer[22] = cncstatus;
-               usb_rawhid_send((void*)sendbuffer, 50);
-               ladeposition=0;
-               sei();
-            }
-            else 
-            { 
-               lcd_puts("BB");
-               uint8_t aktuellelage=0;
-               {
-                  uint8_t aktuelleladeposition=(ladeposition & 0x00FF);
-                  aktuelleladeposition &= 0x03;
- 
-                  // aktuellen Abschnitt laden
-                  aktuellelage = AbschnittLaden_4M(CNCDaten[aktuelleladeposition]);
+                  
+                  //     Serial.printf("Motor AB: aktuellelage code vor: %d\nAbschnittdaten vor Funktion: \n",CNCDaten[aktuelleladeposition][17]);
+                  for(uint8_t i=0;i<27;i++) // 5 us ohne printf, 10ms mit printf
+                  { 
+                     //  Serial.printf("%d \t",CNCDaten[aktuelleladeposition][i]);
+                  }
+                  //Serial.printf("\n");
+                  
+                  
+                  
+                  aktuellelage = AbschnittLaden_bres(CNCDaten[aktuelleladeposition]); 
+                  
+                  
+                  //Serial.printf("deltafastdirectionA: %d Motor AB: ladeposition: %d aktuellelage: %d ",deltafastdirectionA, ladeposition,aktuellelage);
                   if (aktuellelage==2) // war letzter Abschnitt
                   {
-                      endposition=abschnittnummer; // letzter Abschnitt
+                     //Serial.printf("Motor AB:  war letzter Abschnitt xA: %d yA: %d abschnittnummer: %d\n",xA, yA, abschnittnummer);
+                     
+                     endposition=abschnittnummer; // letzter Abschnitt
+                     
                      // Neu: letzten Abschnitt melden
                      sendbuffer[0]=0xD0;
                      sendbuffer[5]=abschnittnummer;
                      sendbuffer[6]=ladeposition;
-                    // sendbuffer[7]=(ladeposition & 0xFF00) >> 8;
+                     //sendbuffer[7]=(ladeposition & 0xFF00) >> 8;
                      sendbuffer[22] = cncstatus;
-                     usb_rawhid_send((void*)sendbuffer, 50);
-                     sei();
-                  }  
+                     usb_rawhid_send((void*)sendbuffer, 0);
+                     // sei();
+                     
+                  }
                   else
                   {
-                     // neuen Abschnitt abruffen
+                     // neuen Abschnitt abrufen
+                     //Serial.printf("Motor AB neuen Abschnitt abrufen xA: %d yA: %d abschnittnummer: %d\n",xA, yA, abschnittnummer);
                      sendbuffer[5]=abschnittnummer;
                      sendbuffer[6]=ladeposition;
-                    // sendbuffer[7]=(ladeposition & 0xFF00) >> 8;
+                     //sendbuffer[7]=(ladeposition & 0xFF00) >> 8;
                      sendbuffer[22] = cncstatus;
+                     // TODO : ev.  A0 setzen
                      sendbuffer[0]=0xA1;
-                     usb_rawhid_send((void*)sendbuffer, 50);
-                     sei();
+                     usb_rawhid_send((void*)sendbuffer, 0);
                   }
                   
                   ladeposition++;
+                  
+                  AbschnittCounter++;
+                  
                }
-               if (aktuellelage==2)
-               {
-                  //ringbufferstatus |= (1<<ENDBIT);
-               }
-               AbschnittCounter++;
             }
+            
+            //       interrupts();
          }
-         sei();
-      }
-      else// if (CounterB)
-      {
-         STEPPERPORT_1 |= (1<<MB_STEP);
-         if (StepCounterB ==0)                     // Keine Steps mehr fuer Motor B
+         else  //if (bres_counterA == 0)        //if ((StepCounterA ==0)  && (StepCounterB ==0))
          {
-            STEPPERPORT_1 |= (1<<MB_EN);               // Motor B OFF
-                
+            //OSZI_A_LO();
+            //if (digitalReadFast(MA_STEP) == 0) //100 ns
+            if ((STEPPERPORT_1 &(1 << MA_STEP)) == 0)
+            {
+               //Serial.printf("step beenden\n"); 
+               //digitalWriteFast(MA_STEP,HIGH);
+               STEPPERPORT_1 |= (1 << MA_STEP);
+            }
+            
+            //if (digitalReadFast(MB_STEP) == 0) //100 ns
+            if ((STEPPERPORT_1 &(1 << MB_STEP)) == 0)
+            {
+               
+               //digitalWriteFast(MB_STEP,HIGH);
+               STEPPERPORT_1 |= (1 << MB_STEP);
+            }
+            if ((xA == 0)  && (yA == 0))
+            {
+               //if (digitalReadFast(MA_EN) == 0)
+               if ((STEPPERPORT_1 &(1 << MB_EN)) == 0)
+               {
+                  // Motoren ausschalten
+                  //Serial.printf("Motor A ausschalten\n"); 
+                  //digitalWriteFast(MA_EN,HIGH);
+                  STEPPERPORT_1 |= (1 << MA_EN);
+               }
+               //if (digitalReadFast(MB_EN) == 0)
+               if ((STEPPERPORT_1 &(1 << MB_EN)) == 0)
+               {
+                  // Motoren ausschalten
+                  //Serial.printf("Motor B ausschalten\n"); 
+                  //digitalWriteFast(MB_EN,HIGH);
+                  STEPPERPORT_1 |= (1 << MA_EN);
+               }
+               
+               
+            }
+            
+            
+            //OSZI_A_HI();
+            //      interrupts();
          }
          
-         
-         
-      }
-      sei(); 
-      
+      } // if deltafastdirectionA > 0
+   
       // End Motor B
       
       // Begin Motor C
@@ -2846,7 +2928,8 @@ uint16_t count=0;
                {
                   //lcd_putint1(ladeposition);
                }
-               aktuellelage = AbschnittLaden_4M(CNCDaten[aktuelleladeposition]);
+               //aktuellelage = AbschnittLaden_4M(CNCDaten[aktuelleladeposition]);
+               aktuellelage = AbschnittLaden_bres(CNCDaten[aktuelleladeposition]);
                if (aktuellelage==2) // war letzter Abschnitt
                {
                   endposition=abschnittnummer; // letzter Abschnitt
@@ -2953,7 +3036,8 @@ uint16_t count=0;
                   
                   // aktuellen Abschnitt laden
                   
-                  aktuellelage = AbschnittLaden_4M(CNCDaten[aktuelleladeposition]);
+                  //aktuellelage = AbschnittLaden_4M(CNCDaten[aktuelleladeposition]);
+                  aktuellelage = AbschnittLaden_bres(CNCDaten[aktuelleladeposition]);
                   if (aktuellelage==2) // war letzter Abschnitt
                   {
                      endposition=abschnittnummer; // letzter Abschnitt
