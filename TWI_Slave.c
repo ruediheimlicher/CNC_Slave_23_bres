@@ -1487,8 +1487,8 @@ uint16_t count=0;
          LOOPLEDPORT ^=(1<<LOOPLED);
          PORTD ^= (1<<PORTD6);
          
-         lcd_gotoxy(18,3);
-         lcd_puthex(loopcount1);
+         //lcd_gotoxy(18,3);
+         //lcd_puthex(loopcount1);
    //      lcd_putint1(richtung);
    //      lcd_putc(' ');
    //      lcd_putint(anschlagcounter);
@@ -1583,24 +1583,99 @@ uint16_t count=0;
                PWM = sendbuffer[20];
                CMD_PORT &= ~(1<<DC);
                
+               deltafastdirectionA = 0;
+               deltaslowdirectionA = 0;
+               deltafastdirectionB = 0;
+               deltaslowdirectionB = 0;
+               deltafastdelayA = 0;
+               deltafastdelayB = 0;
                
-               StepCounterA=0;
-               StepCounterB=0;
-               StepCounterC=0;
-               StepCounterD=0;
-               
-               CounterA=0;
-               CounterB=0;
-               CounterC=0;
-               CounterD=0;
                
                STEPPERPORT_1 |= (1<<MA_EN); // Pololu OFF
                STEPPERPORT_1 |= (1<<MB_EN); // Pololu OFF
                STEPPERPORT_2 |= (1<<MC_EN); // Pololu OFF
                STEPPERPORT_2 |= (1<<MD_EN); // Pololu OFF
- 
+               
                lcd_gotoxy(0,1);
                lcd_puts("HALT\0");
+               
+            }break;
+               
+               
+#pragma mark C0 Pfeiltaste              
+            case 0xC0:
+            {
+               lcd_gotoxy(0,1);
+               lcd_puts("C0");
+               sendbuffer[24] =  buffer[32];
+               
+               // Abschnittnummer bestimmen
+               uint8_t indexh=buffer[18];
+               uint8_t indexl=buffer[19];
+               uint8_t position = buffer[17];
+               //Serial.printf("C0 position: %d\n",position);
+               abschnittnummer= indexh<<8;
+               abschnittnummer += indexl;
+               sendbuffer[0]=0xC2;
+               uint8_t lage = buffer[25];
+               uint8_t richtung = buffer[31];
+               //Serial.printf("\n****************************************\n");
+               //Serial.printf("C0 Abschnitt lage: %d abschnittnummer: %d richtung: %d\n",lage,abschnittnummer, richtung);
+               //Serial.printf("****************************************\n");
+               ladeposition=0;
+               endposition=0xFFFF;
+               cncstatus = 0;
+               motorstatus = 0;
+               ringbufferstatus=0x00;
+               anschlagstatus=0;
+               ringbufferstatus |= (1<<FIRSTBIT);
+               ringbufferstatus |= (1<<STARTBIT);
+               AbschnittCounter=0;
+               endposition=abschnittnummer;
+               // Daten vom buffer in CNCDaten laden
+               {
+                  uint8_t pos=(abschnittnummer);
+                  pos &= 0x03; // 2 bit // Beschraenkung des index auf Buffertiefe 
+                  //if (abschnittnummer>8)
+                  {
+                     //lcd_putint1(pos);
+                  }
+                  uint8_t i=0;
+                  for(i=0;i<USB_DATENBREITE;i++)
+                  {
+                     CNCDaten[pos][i]=buffer[i];  
+                  }
+                  
+               }
+               
+            }break;
+               
+            case 0xC2: // mouseup
+            {
+               //Serial.printf("case C2\n");
+               uint8_t richtung = buffer[31];
+               //Serial.printf("richtung: %d\n",richtung);
+               //Serial.printf("StepCounterA: %d StepCounterB: %d StepCounterC: %d StepCounterD: %d \n",StepCounterA,StepCounterB,StepCounterC,StepCounterD);
+               StepCounterA = 0;
+               StepCounterB = 0;
+               StepCounterC = 0;
+               StepCounterD = 0;
+               
+               xA = 0;
+               yA = 0;
+               bres_counterA = 0;
+               bres_delayA = 0;
+               
+               xB = 0;
+               yB = 0;
+               
+               bres_counterB = 0;
+               bres_delayB = 0;
+               
+               ringbufferstatus = 0;
+               cncstatus = 0;
+               motorstatus = 0;
+               
                
             }break;
                
@@ -1613,7 +1688,7 @@ uint16_t count=0;
                   CMD_PORT &= ~(1<<DC);
                }
                
-                
+               
             }break;
                
                // MARK: E4
@@ -1636,7 +1711,7 @@ uint16_t count=0;
                   CMD_PORT &= ~(1<<DC);
                }
                
-                 
+               
             }break;
                // MARK: E6
             case 0xE6:  // mousup
@@ -1652,7 +1727,7 @@ uint16_t count=0;
                StepCounterB=0;
                StepCounterC=0;
                StepCounterD=0;
-              
+               
                AbschnittCounter=0;
                
             }break;
@@ -1708,67 +1783,67 @@ uint16_t count=0;
                //sendbuffer[0]=0x00;
                
             }break;
-              
-               // 220516: nicht mehr gesetzt, zeigt Endmarkierung sonst nicht an
-// MARK: F0
-            case 0xF0:// cncstatus fuer go_home setzen
-               {
-                  lcd_cls();
-                  lcd_gotoxy(0,0);
-                  lcd_puts("HOME");
-                  
-                //  gohome();
-                //  break;
-                  abschnittnummer = 0; // diff 220520
-                  
-                  ladeposition=0;
-                  endposition=0xFFFF;
-                  cncstatus = 0;
-                  motorstatus = 0;
-                  ringbufferstatus=0x00;
-                  anschlagstatus=0;
-                  ringbufferstatus |= (1<<FIRSTBIT);
-        //          ringbufferstatus |= (1<<STARTBIT); // diff 220520
-
-                  AbschnittCounter=0;
-                  //sendbuffer[8]= versionintl;
-                  //sendbuffer[8]= versioninth;
-
-                  sendbuffer[0]=0xF0;
-                  //sendbuffer[0]=0x45;
-                  cncstatus |= (1<<GO_HOME); // Bit fuer go_home setzen
-                  sendbuffer[22] = cncstatus;
-                  
-                  ringbufferstatus |= (1<<LASTBIT);
-                  // Daten vom buffer in CNCDaten laden
-                  {
-                     uint8_t pos=0;
-                     pos &= 0x03; // 2 bit // Beschraenkung des index auf Buffertiefe 
-                     //if (abschnittnummer>8)
-                     {
-                        //lcd_putint1(pos);
-                     }
-                     uint8_t i=0;
-                     for(i=0;i<USB_DATENBREITE;i++)
-                     {
-                        if (i<5)
-                        {
-                         //  lcd_puthex(buffer[i]);
-                        }
-                        CNCDaten[pos][i]=buffer[i];  
-                     }
-                     
-                  }
-                  startTimer2();
-                  
-                  // F0 melden
-      //            usb_rawhid_send((void*)sendbuffer, 50);
-                 
-                  sei();
-
-               }break;
                
-// MARK: default
+               // 220516: nicht mehr gesetzt, zeigt Endmarkierung sonst nicht an
+               // MARK: F0
+            case 0xF0:// cncstatus fuer go_home setzen
+            {
+               lcd_cls();
+               lcd_gotoxy(0,0);
+               lcd_puts("HOME");
+               
+               //  gohome();
+               //  break;
+               abschnittnummer = 0; // diff 220520
+               
+               ladeposition=0;
+               endposition=0xFFFF;
+               cncstatus = 0;
+               motorstatus = 0;
+               ringbufferstatus=0x00;
+               anschlagstatus=0;
+               ringbufferstatus |= (1<<FIRSTBIT);
+               //          ringbufferstatus |= (1<<STARTBIT); // diff 220520
+               
+               AbschnittCounter=0;
+               //sendbuffer[8]= versionintl;
+               //sendbuffer[8]= versioninth;
+               
+               sendbuffer[0]=0xF0;
+               //sendbuffer[0]=0x45;
+               cncstatus |= (1<<GO_HOME); // Bit fuer go_home setzen
+               sendbuffer[22] = cncstatus;
+               
+               ringbufferstatus |= (1<<LASTBIT);
+               // Daten vom buffer in CNCDaten laden
+               {
+                  uint8_t pos=0;
+                  pos &= 0x03; // 2 bit // Beschraenkung des index auf Buffertiefe 
+                  //if (abschnittnummer>8)
+                  {
+                     //lcd_putint1(pos);
+                  }
+                  uint8_t i=0;
+                  for(i=0;i<USB_DATENBREITE;i++)
+                  {
+                     if (i<5)
+                     {
+                        //  lcd_puthex(buffer[i]);
+                     }
+                     CNCDaten[pos][i]=buffer[i];  
+                  }
+                  
+               }
+               startTimer2();
+               
+               // F0 melden
+               //            usb_rawhid_send((void*)sendbuffer, 50);
+               
+               sei();
+               
+            }break;
+               
+               // MARK: default
             default:
             {
                // Abschnittnummer bestimmen
@@ -1783,8 +1858,8 @@ uint16_t count=0;
                sendbuffer[5]=abschnittnummer;
                sendbuffer[6]=buffer[16];
                
-    //           sendbuffer[8]= versionintl;
-    //           sendbuffer[9]= versioninth;
+               //           sendbuffer[8]= versionintl;
+               //           sendbuffer[9]= versioninth;
                
                /* in Mill32
                 // Lage:
@@ -1794,26 +1869,26 @@ uint16_t count=0;
                 // 1: erster Abschnitt
                 // 2: letzter Abschnitt
                 // 0: innerer Abschnitt
-
+                
                 */
                
-              
- //              usb_rawhid_send((void*)sendbuffer, 50); // nicht jedes Paket melden
+               
+               //              usb_rawhid_send((void*)sendbuffer, 50); // nicht jedes Paket melden
                
                if (abschnittnummer==0)
                {
                   //anschlagstatus &= ~(1<< END_A0); // 220518 diff
-                //  lcd_clr_line(1);
+                  //  lcd_clr_line(1);
                   cli();
                   /*
-                  uint8_t i=0,k=0;
-                  for (k=0;k<RINGBUFFERTIEFE;k++)
-                  {
-                     for(i=0;i<USB_DATENBREITE;i++)
-                     {
-                        CNCDaten[k][i]=0;  
-                     }
-                  }
+                   uint8_t i=0,k=0;
+                   for (k=0;k<RINGBUFFERTIEFE;k++)
+                   {
+                   for(i=0;i<USB_DATENBREITE;i++)
+                   {
+                   CNCDaten[k][i]=0;  
+                   }
+                   }
                    */
                   //CNCDaten = {};
                   
@@ -1831,11 +1906,11 @@ uint16_t count=0;
                   sendbuffer[5]=0x00;
                   
                   //in teensy3.2: timerintervall
-  //                sendbuffer[8] = (TIMERINTERVALL & 0xFF00)>>8;
-  //                sendbuffer[9] = (TIMERINTERVALL & 0x00FF);
+                  //                sendbuffer[8] = (TIMERINTERVALL & 0xFF00)>>8;
+                  //                sendbuffer[9] = (TIMERINTERVALL & 0x00FF);
                   sendbuffer[0]=0xD1;
-                   
-          //         usb_rawhid_send((void*)sendbuffer, 50);
+                  
+                  //         usb_rawhid_send((void*)sendbuffer, 50);
                   startTimer2();
                   sei();
                   
@@ -1886,7 +1961,7 @@ uint16_t count=0;
                      
                      //versionl=VERSION & 0xFF;
                      //versionh=((VERSION >> 8) & 0xFF);
-
+                     
                      
                      
                      
