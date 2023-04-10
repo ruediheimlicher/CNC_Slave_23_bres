@@ -682,7 +682,6 @@ uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
    dataH &= (0x7F); // bit 8 entfernen
    StepCounterA = dataL | (dataH << 8);      //    
 
-   int16_t newdax =  StepCounterA * vz;
    StepCounterA *= micro;
    StepStartA = StepCounterA;
       
@@ -694,9 +693,8 @@ uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
    CounterA = DelayA;
    
    // Motor B
-   //CounterB=0;
-   //digitalWriteFast(MB_EN,LOW);   // Pololu ON
    STEPPERPORT_1 &= ~(1<<MB_EN);   // Pololu ON
+   
    dataL=AbschnittDaten[2];
    dataH=AbschnittDaten[3];
    //lcd_gotoxy(19,1);
@@ -711,7 +709,6 @@ uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
    else 
    {
       richtung &= ~(1<<RICHTUNG_B);
-      //digitalWriteFast(MB_RI, HIGH);
       STEPPERPORT_1 |= (1<< MB_RI);
    }
    
@@ -782,7 +779,6 @@ uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
    CounterC = DelayC;
 
    // Motor D
-   //digitalWriteFast(MD_EN,LOW);   //CounterD=0;
    STEPPERPORT_2 &= ~(1<<MD_EN); // Pololu ON
    dataL=0;
    dataH=0;
@@ -796,15 +792,12 @@ uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
    if (dataH & (0x80)) // Bit 7 gesetzt, negative zahl
    {
       richtung |= (1<<RICHTUNG_D); // Rueckwarts
-      //digitalWriteFast(MD_RI, LOW);
-      richtung |= (1<<RICHTUNG_D); // Rueckwarts
+      STEPPERPORT_2 &= ~(1<<MD_RI); // Rueckwarts
       //// Serial.printf("AbschnittLaden_4M D negativ\n");
-      //lcd_putc('r');
    }
    else 
    {
       richtung &= ~(1<<RICHTUNG_D);
-      //digitalWriteFast(MD_RI, HIGH);
       STEPPERPORT_2 |= (1<< MD_RI);
       //// Serial.printf("AbschnittLaden_4M D positiv\n");
    }
@@ -2075,7 +2068,6 @@ uint16_t count=0;
 // MARK: Motor A  B  
       
       // Anschlag schon registriert
-      // Begin Motor A
       // **************************************
       // * Motor A B *
       // **************************************
@@ -2355,12 +2347,281 @@ uint16_t count=0;
    
       // End Motor A B
       
+      
+      // MARK: Motor B C      
+      // **************************************
+      // * Motor B C *
+      // **************************************
+      if (deltafastdirectionB > 0) // Bewegung auf Seite B vorhanden
+      {
+         
+         // Es hat noch Steps, CounterA ist abgezaehlt (DelayA bestimmt Impulsabstand fuer Steps), kein Anschlag 
+         if ((bres_counterB > 0)  && (bres_delayB == 0) &&((!(anschlagstatus & (1<< END_A0))) && (!(anschlagstatus & (1<< END_B0)))) )        
+         {
+            // start ramp
+            
+            if (rampstatus & (1<<RAMPSTARTBIT))
+            {
+               if (ramptimerintervall > timerintervall_FAST) // noch nicht auf max speed
+               {
+                  //errarray[errpos++] = ramptimerintervall;
+                  //  Serial.printf("start ramptimerintervall: %d\n",ramptimerintervall);
+                  if(rampstatus & (1<<RAMPOKBIT))
+                  {
+                     ramptimerintervall -= RAMPSCHRITT;
+                     
+                     //        delayTimer.update(ramptimerintervall);
+                     //rampbreite++;
+                     
+                  }
+                  
+               }
+               else
+               {
+                  //OSZI_B_HI();
+                  //errarray[errpos++] = 1000;
+                  rampstatus &= ~(1<<RAMPSTARTBIT);
+                  rampendstep = rampstepstart - max(StepCounterA, StepCounterB);
+                  rampstatus |= (1<<RAMPENDBIT);
+                  rampstatus |= (1<<RAMPEND0BIT);
+                  //Serial.printf("end rampstepstart: %d rampendstep: %d ramptimerintervall: %d timerintervall: %d\n",rampstepstart,rampendstep, ramptimerintervall,timerintervall);
+                  //Serial.printf("end ramp\n");
+                  rampstatus &= ~(1<<RAMPOKBIT);
+               }
+            }
+            // end ramp
+            
+            //      noInterrupts();
+            //
+            // Aktualisierung Fehlerterm
+            errB -= deltaslowdirectionB;
+            
+            bres_counterB -= 1; // steps abarbeiten
+            
+            if (bres_counterB < 4)
+            {
+               //Serial.printf("bres_counterB: %d xB: %d yB: %d\n",bres_counterB, xB, yB);
+            }
+            if (errB < 0)
+            {
+               //Fehlerterm wieder positiv (>=0) machen
+               errB += deltafastdirectionB;
+               // Schritt in langsame Richtung, Diagonalschritt
+               xB -= ddxB;
+               yB -= ddyB;
+               if (xB >= 0)
+               {
+                  if (ddxB && (xB >= 0))// Motor C soll steppen
+                  {
+                     STEPPERPORT_2 &= ~(1 << MC_STEP);
+                  }
+               }
+               if (yB >= 0)
+               {
+                  if (ddyB && (yB >= 0))// Motor D soll steppen
+                  {
+                     STEPPERPORT_2 &= ~(1 << MD_STEP);
+                  }
+               }
+               // Impuls C und D starten
+               //Serial.printf("Motor A diagonal\t");
+            }
+            else 
+            {
+               // Schritt in schnelle Richtung, Parallelschritt
+               if (xB >= 0) // noch Schritte da
+               {
+                  xB -= pdxB;
+               }
+               if (yB >= 0) 
+               {
+                  yB -= pdyB;
+               }
+               
+               if (xB >= 0) // noch Schritte Motor C
+               {
+                  if (pdxB && (xB >= 0))// Motor C soll steppen
+                  {
+                     STEPPERPORT_2 &= ~(1 << MC_STEP);
+                  }
+               }
+               if (yB >= 0) // noch Schritte Motor D
+               {
+                  if (pdyB && (yB >= 0))// Motor D soll steppen
+                  {
+                     STEPPERPORT_2 &= ~(1 << MD_STEP);
+                  }
+               }
+               
+               //Serial.printf("Motor A parallel\t");
+            }
+            bres_delayB = deltafastdelayB;
+            
+            
+            // Wenn StepCounterA jetzt nach decrement abgelaufen und relevant: next Datenpaket abrufen
+            if ((bres_counterB == 0 ) )    // relevanter counter abgelaufen
+            {
+               //Serial.printf("Motor BC bres_counterB ist null\n");
+               if ((abschnittnummer==endposition)) // Ablauf fertig
+               {  
+                  //Serial.printf("*** *** *** *** *** *** Motor CD abschnittnummer==endposition xB: %d yB: %d cncstatus: %d\n",xB, yB, cncstatus);
+                  //lcd_gotoxy(0,2);
+                  //lcd_puts("bres B 0");
+                  if (cncstatus & (1<<GO_HOME))
+                  {
+                     homestatus |= (1<<COUNT_A);
+                  }
+                  
+                  //        cli();
+                  ringbufferstatus = 0;
+                  // home: 
+                 
+                  motorstatus=0;
+                  
+                  sendbuffer[0]=0xBD;
+                  sendbuffer[5]=abschnittnummer;
+                  sendbuffer[6]=ladeposition;
+                  //    sendbuffer[7]=(ladeposition & 0xFF00) >> 8;
+                  sendbuffer[22] = cncstatus;
+                  //Serial.printf("*** *** *** *** *** BD 1\n");
+                  usb_rawhid_send((void*)sendbuffer, 0);
+                  ladeposition=0;
+                  
+                  //analogWrite(DC_PWM, 0);
+                  
+                  cncstatus=0;
+                  /*
+                   for (uint16_t i=0;i<255;i++)
+                   {
+                   
+                   Serial.printf("%d\t%d \n",i,errarray[i]);
+                   }
+                   */
+                  //      sei();
+               }
+               else 
+               {
+                  uint8_t aktuellelage=0; // Lage innerhalb der Abschnittserie: Start: 1, Innerhalb: 0, Ende: 2
+                  
+                  uint8_t aktuelleladeposition=(ladeposition & 0x00FF); // 8 bit
+                  aktuelleladeposition &= 0x03;
+                  
+                  // aktuellen Abschnitt laden
+                  //_delay_us(5);
+                  
+                  //Serial.printf("axh: %d \t",CNCDaten[aktuelleladeposition][1]);
+                  uint8_t axh = CNCDaten[aktuelleladeposition][1];
+                  //Serial.printf("axh: %d \t",axh);
+                  if (axh < 128)
+                  {
+                     //Serial.printf("richtung x positiv\n");
+                  }
+                  else 
+                  {
+                     //Serial.printf("richtung x positiv\n");
+                  }
+                  
+                  //     Serial.printf("Motor AB: aktuellelage code vor: %d\nAbschnittdaten vor Funktion: \n",CNCDaten[aktuelleladeposition][17]);
+                  //for(uint8_t i=0;i<27;i++) // 5 us ohne printf, 10ms mit printf
+                  { 
+                     //  Serial.printf("%d \t",CNCDaten[aktuelleladeposition][i]);
+                  }
+                  //Serial.printf("\n");
+                  
+                  
+                  
+                  aktuellelage = AbschnittLaden_bres(CNCDaten[aktuelleladeposition]); 
+                  
+                  
+                  //Serial.printf("deltafastdirectionA: %d Motor AB: ladeposition: %d aktuellelage: %d ",deltafastdirectionA, ladeposition,aktuellelage);
+                  if (aktuellelage==2) // war letzter Abschnitt
+                  {
+                     //Serial.printf("Motor AB:  war letzter Abschnitt xA: %d yA: %d abschnittnummer: %d\n",xA, yA, abschnittnummer);
+                     
+                     endposition=abschnittnummer; // letzter Abschnitt
+                     
+                     // Neu: letzten Abschnitt melden
+                     sendbuffer[0]=0xD0;
+                     sendbuffer[5]=abschnittnummer;
+                     sendbuffer[6]=ladeposition;
+                     //sendbuffer[7]=(ladeposition & 0xFF00) >> 8;
+                     sendbuffer[22] = cncstatus;
+                     usb_rawhid_send((void*)sendbuffer, 0);
+                     // sei();
+                     
+                  }
+                  else
+                  {
+                     // neuen Abschnitt abrufen
+                     //Serial.printf("Motor AB neuen Abschnitt abrufen xA: %d yA: %d abschnittnummer: %d\n",xA, yA, abschnittnummer);
+                     sendbuffer[5]=abschnittnummer;
+                     sendbuffer[6]=ladeposition;
+                     //sendbuffer[7]=(ladeposition & 0xFF00) >> 8;
+                     sendbuffer[22] = cncstatus;
+                     // TODO : ev.  A0 setzen
+                     sendbuffer[0]=0xA1;
+                     usb_rawhid_send((void*)sendbuffer, 0);
+                  }
+                  
+                  ladeposition++;
+                  
+                  AbschnittCounter++;
+                  
+               }
+            }
+            
+            //       interrupts();
+         }
+         else  //if (bres_counterC == 0)        
+         {
+            //OSZI_A_LO();
+            //if (digitalReadFast(MA_STEP) == 0) //100 ns
+            if ((STEPPERPORT_2 &(1 << MC_STEP)) == 0)
+            {
+               
+               STEPPERPORT_2 |= (1 << MC_STEP);
+            }
+            
+            if ((STEPPERPORT_2 &(1 << MD_STEP)) == 0)
+            {
+               
+               STEPPERPORT_2 |= (1 << MD_STEP);
+            }
+            if ((xB == 0)  && (yB == 0))
+            {
+               if ((STEPPERPORT_2 &(1 << MC_EN)) == 0)
+               {
+                  // Motoren ausschalten
+                  //Serial.printf("Motor C ausschalten\n"); 
+                  STEPPERPORT_2 |= (1 << MC_EN);
+               }
+               
+               if ((STEPPERPORT_2 &(1 << MD_EN)) == 0)
+               {
+                  // Motoren ausschalten
+                  //Serial.printf("Motor D ausschalten\n"); 
+                  STEPPERPORT_2 |= (1 << MD_EN);
+               }
+               
+               
+            }
+            
+            
+            //OSZI_A_HI();
+            //      interrupts();
+         }
+         
+      }     
+      
+      
+      
+      
       // Begin Motor C
 // MARK: mark Motor C
       // **************************************
       // * Motor C *
       // **************************************
-      
+      /*
       // Es hat noch Steps, CounterC ist abgezaehlt (DelayA bestimmt Impulsabstand fuer Steps)
       if (StepCounterC &&(CounterC == 0) &&(!(anschlagstatus & (1<< END_C0))))//||(cncstatus & (1<< END_D0)))))//   
       {
@@ -2475,11 +2736,12 @@ uint16_t count=0;
          }
       }
          sei();
+       */
       // MARK: mark Motor D
         // **************************************
       // * Motor D *
       // **************************************
-      
+      /*
       if (StepCounterD && (CounterD == 0)&&(!(anschlagstatus & (1<< END_D0))))
       {
          cli();
@@ -2582,7 +2844,7 @@ uint16_t count=0;
       }
       sei(); 
       // End Motor D
-      
+      */
    
       /**   Ende CNC-routinen   ***********************/
       
