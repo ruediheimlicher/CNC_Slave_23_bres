@@ -2138,17 +2138,17 @@ uint16_t count=0;
                // Schritt in langsame Richtung, Diagonalschritt
                xA -= ddxA;
                yA -= ddyA;
-               if (xA)
+               if (xA >= 0)
                {
-                  if (ddxA && xA)// Motor A soll steppen
+                  if (ddxA && (xA >= 0))// Motor A soll steppen
                   {
                      STEPPERPORT_1 &= ~(1 << MA_STEP);
                      //digitalWriteFast(MA_STEP,LOW);
                   }
                }
-               if (yA)
+               if (yA >= 0)
                {
-                  if (ddyA && yA)// Motor B soll steppen
+                  if (ddyA && (yA >= 0))// Motor B soll steppen
                   {
                      //digitalWriteFast(MB_STEP,LOW);
                      STEPPERPORT_1 &= ~(1 << MB_STEP);
@@ -2160,26 +2160,26 @@ uint16_t count=0;
             else 
             {
                // Schritt in schnelle Richtung, Parallelschritt
-               if (xA) // noch Schritte da
+               if (xA >= 0) // noch Schritte da
                {
                   xA -= pdxA;
                }
-               if (yA) 
+               if (yA >= 0) 
                {
                   yA -= pdyA;
                }
                
-               if (xA) // noch Schritte Motor A
+               if (xA >= 0) // noch Schritte Motor A
                {
-                  if (pdxA && xA)// Motor A soll steppen
+                  if (pdxA && (xA >= 0))// Motor A soll steppen
                   {
                      STEPPERPORT_1 &= ~(1 << MA_STEP);
                      //digitalWriteFast(MA_STEP,LOW);
                   }
                }
-               if (yA) // noch Schritte Motor B
+               if (yA >= 0) // noch Schritte Motor B
                {
-                  if (pdyA && yA)// Motor B soll steppen
+                  if (pdyA && (yA >= 0))// Motor B soll steppen
                   {
                      //digitalWriteFast(MB_STEP,LOW);
                      STEPPERPORT_1 &= ~(1 << MB_STEP);
