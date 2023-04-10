@@ -556,6 +556,7 @@ ISR(TIMER2_COMP_vect) // Schaltet Impuls an SERVOPIN0 aus
 // MARK: mark AbschnittLaden_bres
 uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
 {
+   OSZIALO;
    stopTimer2();
  //  lcd_gotoxy(15,0);
  //  lcd_puts("    ");
@@ -605,7 +606,6 @@ uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
    
    micro = AbschnittDaten[26];
    
-   uint16_t index = (AbschnittDaten[18] << 8) | AbschnittDaten[19];
    
    if (AbschnittDaten[35] == 1)
    {
@@ -684,7 +684,6 @@ uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
    dataH &= (0x7F); // bit 8 entfernen
    StepCounterA = dataL | (dataH << 8);      //    
 
-   int16_t newdax =  StepCounterA * vz;
    StepCounterA *= micro;
    StepStartA = StepCounterA;
       
@@ -720,7 +719,6 @@ uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
    dataH &= (0x7F);
     
    StepCounterB = dataL | (dataH <<8);
-   int16_t newday = StepCounterB * vz;
    
    StepCounterB *= micro;
    
@@ -937,7 +935,7 @@ uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
 
    
    startTimer2();
-   
+   OSZIAHI; 
    //// Serial.printf("\nAbschnittLaden_bres end aktuellelage: %d \n",returnwert);
      return returnwert;
  
@@ -1227,7 +1225,6 @@ void gohome(void)
    CNCDaten[1][19] = 1; // indexl
    CNCDaten[1][21] = 1;
    
-  // uint8_t pos=AbschnittLaden_4M(CNCDaten[0]); 
    uint8_t pos=AbschnittLaden_bres(CNCDaten[0]); 
    
    richtung |= (1<<RICHTUNG_A ); // horizontaler Anschlag A
@@ -1347,7 +1344,7 @@ void AbschnittEndVonMotor(const uint8_t derstatus) // 0 - 3 fuer A - D   52 us
          aktuelleladeposition &= 0x03; // Position im Ringbuffer
          // aktuellen Abschnitt laden
          
-         aktuellelage = AbschnittLaden_4M((uint8_t*)CNCDaten[aktuelleladeposition]); //gibt Lage zurueck: 1: Anfang, 2: Ende, 0; innerhalb
+         aktuellelage = AbschnittLaden_bres((uint8_t*)CNCDaten[aktuelleladeposition]); //gibt Lage zurueck: 1: Anfang, 2: Ende, 0; innerhalb
          uint8_t aktuellermotor = motor;
          aktuellermotor <<=6;
          cncstatus |= aktuellermotor;
@@ -1401,7 +1398,6 @@ int main (void)
 {
     int8_t r;
 
-uint16_t count=0;
     
    // set for 16 MHz clock
    CPU_PRESCALE(0);
@@ -1557,7 +1553,7 @@ uint16_t count=0;
       r = usb_rawhid_recv((void*)buffer, 0);
       if (r > 0) 
       {
-         //OSZIBHI;
+         OSZIBLO;
          cli(); 
          
          uint8_t code = 0x00;
@@ -1928,7 +1924,7 @@ uint16_t count=0;
          } // switch code
          code=0;
          sei();
-         
+         OSZIBHI;
       } // r>0, neue Daten
       
       /**   End USB-routinen   ***********************/
@@ -2135,17 +2131,17 @@ uint16_t count=0;
                // Schritt in langsame Richtung, Diagonalschritt
                xA -= ddxA;
                yA -= ddyA;
-               if (xA)
+               if (xA >= 0)
                {
-                  if (ddxA && xA)// Motor A soll steppen
+                  if (ddxA && (xA >= 0))// Motor A soll steppen
                   {
                      STEPPERPORT_1 &= ~(1 << MA_STEP);
                      //digitalWriteFast(MA_STEP,LOW);
                   }
                }
-               if (yA)
+               if (yA >= 0)
                {
-                  if (ddyA && yA)// Motor B soll steppen
+                  if (ddyA && (yA >= 0))// Motor B soll steppen
                   {
                      //digitalWriteFast(MB_STEP,LOW);
                      STEPPERPORT_1 &= ~(1 << MB_STEP);
@@ -2158,26 +2154,26 @@ uint16_t count=0;
             {
                // Schritt in schnelle Richtung, Parallelschritt
  
-               if (xA) // noch Schritte da
+               if (xA > 0) // noch Schritte da
                {
                   xA -= pdxA;
                }
-               if (yA) 
+               if (yA > 0) 
                {
                   yA -= pdyA;
                }
                
-               if (xA) // noch Schritte Motor A
+               if (xA >= 0) // noch Schritte Motor A
                {
-                  if (pdxA && xA)// Motor A soll steppen
+                  if (pdxA && (xA >= 0))// Motor A soll steppen
                   {
                      STEPPERPORT_1 &= ~(1 << MA_STEP);
                      //digitalWriteFast(MA_STEP,LOW);
                   }
                }
-               if (yA) // noch Schritte Motor B
+               if (yA >= 0) // noch Schritte Motor B
                {
-                  if (pdyA && yA)// Motor B soll steppen
+                  if (pdyA && (yA >= 0))// Motor B soll steppen
                   {
                      //digitalWriteFast(MB_STEP,LOW);
                      STEPPERPORT_1 &= ~(1 << MB_STEP);
@@ -2412,27 +2408,27 @@ uint16_t count=0;
                //Fehlerterm wieder positiv (>=0) machen
                errB += deltafastdirectionB;
                // Schritt in langsame Richtung, Diagonalschritt
-               if (xB)
+               if (xB > 0)
                {
                   xB -= ddxB;
                }
-               if (yB)
+               if (yB > 0)
                {
                   yB -= ddyB;
                }
 
                
-               if (xB)
+               if (xB >= 0)
                {
-                  if (ddxB && xB)// Motor C soll steppen
+                  if (ddxB && (xB >= 0))// Motor C soll steppen
                   {
                      STEPPERPORT_2 &= ~(1 << MC_STEP);
                      //digitalWriteFast(MA_STEP,LOW);
                   }
                }
-               if (yB)
+               if (yB >= 0)
                {
-                  if (ddyB && yB)// Motor D soll steppen
+                  if (ddyB && (yB >= 0))// Motor D soll steppen
                   {
                      //digitalWriteFast(MD_STEP,LOW);
                      STEPPERPORT_2 &= ~(1 << MD_STEP);
@@ -2447,16 +2443,16 @@ uint16_t count=0;
                xB -= ddxB;
                yB -= ddyB;
 
-               if (xB) // noch Schritte Motor C
+               if (xB >= 0) // noch Schritte Motor C
                {
-                  if (pdxB && xB)// Motor C soll steppen
+                  if (pdxB && (xB >= 0))// Motor C soll steppen
                   {
                      STEPPERPORT_2 &= ~(1 << MC_STEP);
                   }
                }
-               if (yB) // noch Schritte Motor D
+               if (yB >= 0) // noch Schritte Motor D
                {
-                  if (pdyB && yB)// Motor B soll steppen
+                  if (pdyB && (yB >= 0))// Motor B soll steppen
                   {
                      STEPPERPORT_2 &= ~(1 << MD_STEP);
                   }
