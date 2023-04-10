@@ -344,7 +344,7 @@ void slaveinit(void)
 	STEPPERPORT_1 |= (1 << MB_RI);	// HI
 	
 	STEPPERDDR_1 |= (1 << MB_EN);
-	STEPPERPORT_1 &= ~(1 << MB_EN); // LO
+	STEPPERPORT_1 |= (1 << MB_EN); // LO
    
    //Seite 2
 	STEPPERDDR_2 |= (1<<MC_STEP);
@@ -612,8 +612,6 @@ uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
       // Serial.printf("+++ +++ +++ \t\t\t index: %d AbschnittLaden_bres WENDEPUNKT \n",index);
       rampstatus |=(1<<RAMPOKBIT);
    }
-
-   
    
    // pwm-rate
    PWM = AbschnittDaten[20];
@@ -2328,7 +2326,7 @@ uint16_t count=0;
             if ((xA == 0)  && (yA == 0))
             {
                //if (digitalReadFast(MA_EN) == 0)
-               if ((STEPPERPORT_1 &(1 << MB_EN)) == 0)
+               if ((STEPPERPORT_1 &(1 << MA_EN)) == 0)
                {
                   // Motoren ausschalten
                   //Serial.printf("Motor A ausschalten\n"); 
@@ -2336,12 +2334,13 @@ uint16_t count=0;
                   STEPPERPORT_1 |= (1 << MA_EN);
                }
                //if (digitalReadFast(MB_EN) == 0)
+               
                if ((STEPPERPORT_1 &(1 << MB_EN)) == 0)
                {
                   // Motoren ausschalten
                   //Serial.printf("Motor B ausschalten\n"); 
                   //digitalWriteFast(MB_EN,HIGH);
-                  STEPPERPORT_1 |= (1 << MA_EN);
+                  STEPPERPORT_1 |= (1 << MB_EN);
                }
                
                
@@ -2354,7 +2353,7 @@ uint16_t count=0;
          
       } // if deltafastdirectionA > 0
    
-      // End Motor B
+      // End Motor A B
       
       // Begin Motor C
 // MARK: mark Motor C
