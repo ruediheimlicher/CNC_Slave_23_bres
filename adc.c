@@ -11,44 +11,46 @@
 #include <avr/io.h>
 
 
-struct adcwert16 ADCWert16;
+//struct adcwert16 ADCWert16;
 
-
+/*
 struct adcwert16 readKanal16Bit(uint8_t kanal)
 {
-	
-	struct adcwert16 tempWert;
-	tempWert.wertH=0;
-	tempWert.wertL=0;
-	tempWert.wert8H=0;
-	ADCSRA = (1<<ADEN) | (1<<ADPS2) | (1<<ADPS0);    // Frequenzvorteiler auf 32 setzen und ADC aktivieren 
-	
-	ADMUX = kanal;                      // Ÿbergebenen Kanal waehlen
-	//ADMUX |= (1<<REFS1) | (1<<REFS0); // interne Referenzspannung nutzen 
-	ADMUX |=  (1<<REFS0); // VCC als Referenzspannung nutzen 
-	
-	/* nach Aktivieren des ADC wird ein "Dummy-Readout" empfohlen, man liest
-     also einen Wert und verwirft diesen, um den ADC "warmlaufen zu lassen" */
-	ADCSRA |= (1<<ADSC);              // eine ADC-Wandlung (Der ADC setzt dieses Bit ja wieder auf 0 nach dem Wandeln)
-	while ( ADCSRA & (1<<ADSC) ) {
-		;     // auf Abschluss der Wandlung warten 
-	}
-    ADCSRA |= (1<<ADSC);            // eine Wandlung
-    while ( ADCSRA & (1<<ADSC) ) {
-		;     // auf Abschluss der Wandlung warten 
-    }
-	
-	tempWert.wertL=ADCL;            //Read 8 low bits first (important)
-	tempWert.wertH=ADCH;
-	tempWert.wert8H=(ADCW<<2);
-	
-	// value|=((int)ADCH << 8); //read 2 high bits and shift into top byte
-	
-	ADCSRA &= ~(1<<ADEN);             // ADC deaktivieren ("Enable-Bit" auf LOW setzen)
-	
-	return tempWert;
+   
+   struct adcwert16 tempWert;
+   
+   
+   tempWert.wertH=0;
+   tempWert.wertL=0;
+   tempWert.wert8H=0;
+   ADCSRA = (1<<ADEN) | (1<<ADPS2) | (1<<ADPS0);    // Frequenzvorteiler auf 32 setzen und ADC aktivieren 
+   
+   ADMUX = kanal;                      // Ÿbergebenen Kanal waehlen
+   //ADMUX |= (1<<REFS1) | (1<<REFS0); // interne Referenzspannung nutzen 
+   ADMUX |=  (1<<REFS0); // VCC als Referenzspannung nutzen 
+   
+   //  nach Aktivieren des ADC wird ein "Dummy-Readout" empfohlen, man liest
+    also einen Wert und verwirft diesen, um den ADC "warmlaufen zu lassen" 
+   ADCSRA |= (1<<ADSC);              // eine ADC-Wandlung (Der ADC setzt dieses Bit ja wieder auf 0 nach dem Wandeln)
+   while ( ADCSRA & (1<<ADSC) ) {
+      ;     // auf Abschluss der Wandlung warten 
+   }
+   ADCSRA |= (1<<ADSC);            // eine Wandlung
+   while ( ADCSRA & (1<<ADSC) ) {
+      ;     // auf Abschluss der Wandlung warten 
+   }
+   
+   tempWert.wertL=ADCL;            //Read 8 low bits first (important)
+   tempWert.wertH=ADCH;
+   tempWert.wert8H=(ADCW<<2);
+   
+   // value|=((int)ADCH << 8); //read 2 high bits and shift into top byte
+   
+   ADCSRA &= ~(1<<ADEN);             // ADC deaktivieren ("Enable-Bit" auf LOW setzen)
+   
+   return tempWert;
 }
-
+*/
 void initADC(uint8_t derKanal)
 {
    ADCSRA = (1<<ADEN) | (1<<ADPS2) | (1<<ADPS0);    // Frequenzvorteiler auf 32 setzen und ADC aktivieren 
