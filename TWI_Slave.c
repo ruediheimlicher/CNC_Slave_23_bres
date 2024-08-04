@@ -1014,7 +1014,7 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
                //lcd_puts("P1 M");
                //lcd_putint1(motor);
 
-               STEPPERPORT_1 |= (1<<(MA_EN + motor));     // Motor 0 ODER 1 OFF // andere Richtung kommt anschliessend von master
+               STEPPERPORT_1 |= (1<<(MA_EN + motor)); // Motor 0 ODER 1 OFF // andere Richtung kommt anschliessend von master
                
                if (anschlagstatus &(1<< END_A0)) // Anschlag von Motor A               
                {
@@ -1112,6 +1112,7 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
     //        richtung &= ~(1<<(RICHTUNG_A + motor)); // Richtung umschalten // 220518 diff
 // ********************************* End HOME *****************
          } // end HOME
+         
          else           // beide Seiten abstellen, Vorgang unterbrechen
          {    
             lcd_gotoxy(10,0);
@@ -2119,7 +2120,7 @@ uint16_t count=0;
       
       if ((STEPPERPIN_1 & (1<< END_A0_PIN)) ) // Eingang ist HI, Schlitten nicht am Anschlag A0
       {
-         if (anschlagstatus &(1<< END_A0))
+         if (anschlagstatus &(1<< END_A0)) // Schlitten war, aber ist nicht mehr am Anschlag
          {
             anschlagstatus &= ~(1<< END_A0); // Bit fuer Anschlag A0 zuruecksetzen
             //lcd_gotoxy(12,2);
