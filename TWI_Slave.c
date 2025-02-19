@@ -504,7 +504,7 @@ volatile uint16_t timer2Counter=0;
 ISR (TIMER2_OVF_vect) 
 { 
 	timer2Counter +=1;
-   
+   /*
    if (PWM) // Draht soll heiss sein. 
    {
    }
@@ -512,7 +512,7 @@ ISR (TIMER2_OVF_vect)
    {
       pwmposition =0;
    }
-
+*/
 	if (timer2Counter >= 14) 
 	{
        
@@ -2419,6 +2419,8 @@ uint16_t count=0;
                      sendbuffer[6]=ladeposition;
                      //sendbuffer[7]=(ladeposition & 0xFF00) >> 8;
                      sendbuffer[22] = cncstatus;
+                     sendbuffer[23] = PWM;
+                     
                      usb_rawhid_send((void*)sendbuffer, 0);
                      // sei();
                      
