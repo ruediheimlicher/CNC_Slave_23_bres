@@ -623,7 +623,8 @@ uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
     26   micro
     
     */         
-   
+   lcd_gotoxy(12,0);
+   lcd_puthex(AbschnittDaten[16]);
    motorsteps = AbschnittDaten[25];
    
    micro = AbschnittDaten[26];
@@ -707,6 +708,8 @@ uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
 
    StepCounterA *= micro;
    StepStartA = StepCounterA;
+   lcd_gotoxy(0,1);
+   lcd_putint12(StepCounterA);
       
    delayL=AbschnittDaten[4];
    delayH=AbschnittDaten[5];
@@ -740,7 +743,9 @@ uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
    StepCounterB = dataL | (dataH <<8);
    
    StepCounterB *= micro;
-   
+   lcd_gotoxy(10,1);
+   lcd_putint12(StepCounterB);
+
    
     DelayB = (AbschnittDaten[7]<<8) | AbschnittDaten[6];
    
@@ -1098,8 +1103,8 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
             sendbuffer[28] = StepCounterC & 0x00FF;
             sendbuffer[29] = (StepCounterD & 0xFF0)>>8;
             sendbuffer[30] = StepCounterD & 0x00FF;
-            lcd_gotoxy(0,0);
-            lcd_puts("code ");
+            lcd_gotoxy(0,3);
+            lcd_puts("c ");
             lcd_gotoxy(6+motor,0);
             lcd_puthex(sendbuffer[0]);
  //           usb_rawhid_send((void*)sendbuffer, 50); // 220518 diff
@@ -1115,7 +1120,7 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
          
          else           // beide Seiten abstellen, Vorgang unterbrechen
          {    
-            lcd_gotoxy(10,0);
+            lcd_gotoxy(15,1);
             lcd_puts("both");
             cncstatus=0;
             sendbuffer[0]=0xA5 + motor;
@@ -1131,7 +1136,9 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
                STEPPERPORT_1 |= (1<<(MA_EN + motor));     // Motor 0,1 OFF
                STEPPERPORT_2 |= (1<<(MC_EN + motor)); // Paralleler Motor 2,3 OFF
                
-               
+       //        STEPPERPORT_1 |= (1<<(MA_STEP + motor));     // Motor 0,1 OFF
+       //        STEPPERPORT_2 |= (1<<(MC_STEP + motor)); // Paralleler Motor 2,3 OFF
+             
             } // end Stepperport 1
             else // Stepperport 2
             {
@@ -1164,7 +1171,7 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
             sendbuffer[5]=abschnittnummer;
             sendbuffer[6]=ladeposition;
             sendbuffer[22] = cncstatus;
-            lcd_gotoxy(0,0);
+            lcd_gotoxy(10,3);
             lcd_puts("code ");
             lcd_gotoxy(6+motor,0);
             lcd_puthex(sendbuffer[0]);
@@ -1833,8 +1840,11 @@ uint16_t count=0;
                CounterC=0;
                CounterD=0;
                
-               lcd_gotoxy(14,0);
-               lcd_puts("reset\0");
+               lcd_gotoxy(16,0);
+               lcd_puts("res\0");
+               lcd_clr_line(1);
+               lcd_clr_line(2);
+               lcd_clr_line(2);
                //cli();
                //usb_init();
                /*
@@ -1856,8 +1866,9 @@ uint16_t count=0;
             case 0xF0:// cncstatus fuer go_home setzen
             {
                lcd_cls();
-               lcd_gotoxy(10,0);
+               lcd_gotoxy(8,0);
                lcd_puts("HOME ");
+               
                lcd_puthex(PINC);
                lcd_gotoxy(0,2);
                
@@ -1887,6 +1898,7 @@ uint16_t count=0;
                sendbuffer[22] = cncstatus;
                
                ringbufferstatus |= (1<<LASTBIT);
+               //break;
                // Daten vom buffer in CNCDaten laden
                {
                   uint8_t pos=0;
@@ -1900,7 +1912,7 @@ uint16_t count=0;
                   {
                      if (i<5)
                      {
-                        lcd_puthex(buffer[i]);
+                        //lcd_puthex(buffer[i]);
                      }
                      CNCDaten[pos][i]=buffer[i];  
                   }
@@ -2332,12 +2344,15 @@ uint16_t count=0;
             // Wenn StepCounterA jetzt nach decrement abgelaufen und relevant: next Datenpaket abrufen
             if ((bres_counterA == 0 ) )    // relevanter counter abgelaufen
             {
+               lcd_gotoxy(0,2);
+               lcd_puts("A=0");
+
                //Serial.printf("Motor AB bres_counterA ist null\n");
                if ((abschnittnummer==endposition)) // Ablauf fertig
                {  
                   //Serial.printf("*** *** *** *** *** *** Motor AB abschnittnummer==endposition xA: %d yA: %d cncstatus: %d\n",xA, yA, cncstatus);
-                  lcd_gotoxy(0,2);
-                  lcd_puts("bres A 0");
+                  lcd_gotoxy(4,2);
+                  lcd_puts("EndA");
                   if (cncstatus & (1<<GO_HOME))
                   {
                      lcd_puts("home A");
@@ -2546,7 +2561,8 @@ uint16_t count=0;
             // Aktualisierung Fehlerterm
             errB -= deltaslowdirectionB;
             
-            bres_counterB -= 1; // steps abarbeiten
+            bres_counterB -= 1; // steps abarbeiten             STEPPERPORT_1 |= (1<<(MA_EN + motor));     // Motor 0,1 OFF
+  
             
             if (bres_counterB < 4)
             {
@@ -2611,12 +2627,15 @@ uint16_t count=0;
             // Wenn StepCounterA jetzt nach decrement abgelaufen und relevant: next Datenpaket abrufen
             if ((bres_counterB == 0 ) )    // relevanter counter abgelaufen
             {
+               lcd_gotoxy(10,2);
+               lcd_puts("B=0");
+
                //Serial.printf("Motor BC bres_counterB ist null\n");
                if ((abschnittnummer==endposition)) // Ablauf fertig
                {  
                   //Serial.printf("*** *** *** *** *** *** Motor CD abschnittnummer==endposition xB: %d yB: %d cncstatus: %d\n",xB, yB, cncstatus);
-                  lcd_gotoxy(0,2);
-                  lcd_puts("bres B 0");
+                  lcd_gotoxy(14,2);
+                  lcd_puts("EndB");
                   if (cncstatus & (1<<GO_HOME))
                   {
                      lcd_puts("home B");
