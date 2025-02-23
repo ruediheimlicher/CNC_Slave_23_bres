@@ -8,6 +8,7 @@
 #ifndef settings_h
 #define settings_h
 
+#define LCD 0
 #define HIGH 1
 #define LOW 0
 // Ramp
