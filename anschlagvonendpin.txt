@@ -1,0 +1,227 @@
+{
+           
+       uint8_t anschlagsend = 0;
+     
+      sendbuffer[13] = 0; // home
+      
+      if ((digitalRead(END_A0_PIN) == 0) && (richtungA & (1<<RICHTUNG_A))) // Anschlag an A0 OK links in Draw
+      {
+         sendbuffer[0] = 0xA5 ;
+         //Motor A stoppen
+         
+         digitalWriteFast(MA_EN,HIGH);
+         deltafastdirectionA = 0;
+         deltafastdelayA = 0;
+         deltaslowdirectionA = 0;
+         anschlagstruct.data = RICHTUNG_A;
+         anschlagstruct.aktiv = 1;
+         richtungA &= ~(1<<RICHTUNG_A);
+         anschlagsend = 1;
+         // Home checken
+         if(cncstatus & (1 << GO_HOME)) // daten von homesenkrecht laden
+         {
+            if (OLED)
+            {
+               oled_delete(0,anschlagstruct.y,120);
+               u8g2.drawStr(anschlagstruct.x,anschlagstruct.y+20,"HOME A0");
+            }
+            CNCDaten[1][26] = 1;
+            AbschnittLaden_bres(CNCDaten[1]);
+
+         }
+      }
+    
+      if ((digitalRead(END_A1_PIN) == 0) && (richtungA & (1<<RICHTUNG_C)))// Anschlag an A1, rechts in Draw
+      {
+         if(OLED)
+         {
+         oled_delete(0,anschlagstruct.y,120);
+         u8g2.drawStr(anschlagstruct.x,anschlagstruct.y,"A1");
+         
+         }
+         //u8g2.print("A1");
+         //Motor A stoppen
+         sendbuffer[0] = 0xA5 + 1;
+         digitalWriteFast(MA_EN,HIGH);
+         deltafastdirectionA = 0;
+         deltafastdelayA = 0;
+         deltaslowdirectionA = 0;
+         anschlagstruct.data = RICHTUNG_C;
+         anschlagstruct.aktiv = 1;
+         anschlagsend = 1;
+         richtungA &= ~(1<<RICHTUNG_C);
+
+
+      }
+
+      if (((digitalRead(END_B0_PIN) == 0) && (richtungB & (1<<RICHTUNG_D))))// Anschlag an B0
+      {
+         if(OLED)
+         {
+            oled_delete(0,anschlagstruct.y,120);
+
+            u8g2.drawStr(anschlagstruct.x,anschlagstruct.y,"B0");
+            u8g2.setCursor(anschlagstruct.x+20,anschlagstruct.y);
+            u8g2.print("*");
+            u8g2.print(richtungB);
+            u8g2.print("*");
+         }
+            //u8g2.print("B0");
+            //Motor B  stoppen
+            digitalWriteFast(MB_EN,HIGH);
+            deltafastdirectionB = 0;
+            deltafastdelayB = 0;
+            deltaslowdirectionB = 0;
+            
+
+            anschlagsend = 1;
+            anschlagstruct.data = RICHTUNG_B;
+            sendbuffer[0] = 0xA5 + 2;
+            richtungB  &= ~(1<<RICHTUNG_D);
+           
+            anschlagstruct.aktiv = 1;
+
+
+            if(cncstatus & (1 << GO_HOME))
+            {
+               sendbuffer[13] = 1;
+               if (OLED)
+               {
+                  oled_delete(0,anschlagstruct.y,120);
+                  u8g2.drawStr(anschlagstruct.x,anschlagstruct.y+20,"HOME B0");
+               }
+               
+               digitalWriteFast(MA_EN,HIGH);
+               cncstatus &= ~(1 << GO_HOME);
+               abschnittnummer = 0; //
+               ladeposition = 0;
+               endposition = 0xFFFF;
+               cncstatus = 0;
+               motorstatus = 0;
+               ringbufferstatus = 0x00;
+               anschlagstatus = 0;
+               uint8_t i = 0;
+               anschlagsend = 1;
+               // andere Seite auch abstellen
+               deltafastdirectionA = 0;
+               deltafastdelayA = 0;
+               deltaslowdirectionA = 0;
+               
+
+               for (i = 0; i < USB_DATENBREITE; i++)
+               {
+                  CNCDaten[0][i] = 0;
+                  CNCDaten[1][i] = 0;
+               }
+               digitalWriteFast(MA_EN, HIGH);
+               digitalWriteFast(MB_EN, HIGH);
+               
+               digitalWriteFast(MA_STEP, HIGH);
+               digitalWriteFast(MB_STEP, HIGH);
+
+
+               taskstatus = 0;
+               //pfeilrampcounter = 0;
+               //endimpulsdauer = ENDIMPULSDAUER;
+               //analogtastaturstatus &= ~(1<<TASTE_ON);
+
+            }
+
+      }
+
+      if ((digitalRead(END_B1_PIN) == 0) && (richtungB & (1<<RICHTUNG_B)))// Anschlag an B1
+      {
+         if(OLED)
+         {
+             oled_delete(0,anschlagstruct.y,120);
+            
+           // oled_delete(anschlagstruct.x,anschlagstruct.y,(128 - anschlagstruct.x));
+            
+            u8g2.drawStr(anschlagstruct.x,anschlagstruct.y,"B1");
+            u8g2.setCursor(anschlagstruct.x+20,anschlagstruct.y);
+            u8g2.print("*");
+            u8g2.print(richtungB);
+            u8g2.print("*");
+
+         }
+         //u8g2.print("B1");
+         //Motor B stoppen
+         digitalWriteFast(MB_EN,HIGH);
+         deltafastdirectionB = 0;
+         deltafastdelayB = 0;
+         deltaslowdirectionB = 0;
+
+         anschlagsend = 1;
+         anschlagstruct.data = RICHTUNG_D;
+         sendbuffer[0] = 0xA5 + 3;
+         richtungB &= ~(1<<RICHTUNG_B);
+
+         anschlagstruct.aktiv = 1;
+
+
+         
+         if(cncstatus & (1 << GO_HOME)) // 
+         {
+            sendbuffer[13] = 1;
+            digitalWriteFast(MB_EN,HIGH);
+            cncstatus &= ~(1 << GO_HOME);
+            abschnittnummer = 0; //
+            ladeposition = 0;
+            endposition = 0xFFFF;
+            cncstatus = 0;
+            motorstatus = 0;
+            ringbufferstatus = 0x00;
+            anschlagstatus = 0;
+            uint8_t i = 0;
+            anschlagsend = 1;
+            // andere Seite auch abstellen
+            deltafastdirectionA = 0;
+            deltafastdelayA = 0;
+            deltaslowdirectionA = 0;
+
+            for (i = 0; i < USB_DATENBREITE; i++)
+            {
+               CNCDaten[0][i] = 0;
+               CNCDaten[1][i] = 0;
+            }
+            digitalWriteFast(MA_EN, HIGH);
+            digitalWriteFast(MB_EN, HIGH);
+            
+            digitalWriteFast(MA_STEP, HIGH);
+            digitalWriteFast(MB_STEP, HIGH);
+
+            taskstatus = 0;
+
+            // Home erreicht
+         }
+         
+         
+      }
+
+
+
+
+      if (anschlagsend)
+      {
+         
+          sendbuffer[5] = (abschnittnummer & 0xFF00) >> 8;
+         
+         sendbuffer[6] = abschnittnummer & 0x00FF;
+
+         sendbuffer[7] = (ladeposition & 0xFF00) >> 8;
+         sendbuffer[8] = ladeposition & 0x00FF;
+
+         //
+         sendbuffer[22] = cncstatus;
+        {
+            //sendbuffer[9] += HOMESCHRITT; // 
+         }
+
+         uint8_t senderfolg = usb_rawhid_send((void *)sendbuffer, 10);
+
+         
+      }
+   
+      //u8g2.sendBuffer();
+
+}
