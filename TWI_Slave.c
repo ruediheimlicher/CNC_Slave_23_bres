@@ -49,7 +49,7 @@ static volatile uint8_t sendbuffer[32]={};
 #define STOPBIT   6        // Ablauf stoppen
 #define FIRSTBIT   7
 
-uint8_t CNCDaten[RINGBUFFERTIEFE][33];
+uint8_t CNCDaten[RINGBUFFERTIEFE][48];
 uint8_t CDCStringArray[RINGBUFFERTIEFE];
 
 //volatile uint8_t inposition= 0;
@@ -144,7 +144,7 @@ volatile uint8_t liniencounter= 0;
 #define MB_EN           5
 
 #define END_A0          6           // Bit fuer Endanschlag bei A0
-#define END_B0          7           // Bit fuer Endanschlag bei A1
+#define END_B0          7           // Bit fuer Endanschlag bei B0
 
 
 // Seite 2
@@ -178,7 +178,7 @@ volatile uint8_t liniencounter= 0;
 #define DC                  7    // DC ON: HI
 #define STROM               4    // Stepperstrom Generell ON: LO
 
-#define GO_HOME           7     // Bit fuer befehl beginn home auf cncstatus
+#define GO_HOME            7     // Bit fuer befehl beginn home auf cncstatus
 #define DC_DIVIDER         1      // teilt die pwm-Frequenz in ISR
 
 volatile uint8_t timer0startwert=TIMER0_STARTWERT;
@@ -1032,53 +1032,70 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
          lcd_gotoxy(0,1);
          lcd_puts("Anschlag ");
          lcd_putc('A' + motor);
-         lcd_putc('0');
+         lcd_putc('*');
+         
+         
          anschlagstatus |= (1<< (END_A0 + motor));      // Bit fuer Anschlag A0+motor setzen
-         //anschlagstatus |= (1<< (END_A0 + motor + 4)); 
-   
+         lcd_putint(anschlagstatus);
+         
         // NSLog(@"anschlagstatus gesetzt: %d cncstatus: %d" anschlagstatus, cncstatus);
-         //cncstatus |=  (1<<GO_HOME);
+
          if (cncstatus & (1<<GO_HOME)) // nur eigene Seite abstellen
          {
-   // ********************************* Start HOME *****************
+            // ********************************* Start HOME *****************
             // Zuerst kommt der Schlitten am Anschalg A oder C an
             
-            lcd_gotoxy(15,2);
-            lcd_puts("ANSCHLAG");
+            lcd_gotoxy(12,1);            
+            lcd_putc('A' + motor);
+            lcd_putint1(motor);
+            lcd_puts(" HOME");
            // Zuerst horizonal auf Anschlag
-            switch (motor) // Stepperport 1
-            {
-               case 0:
-               {
-                  
-               }
-                                    
-            }//switch motor
-            //lcd_gotoxy(10,1);
-            //lcd_putc('L');
-            //lcd_putint2(ladeposition);
-            
+              
             sendbuffer[0]=0xB5 + motor; // HOME Ankunft melden
-            cncstatus |= (1<<motor); 
             
+            cncstatus |= (1<<motor); 
              
             if (motor<2) // Stepperport 1
             {
-               //lcd_gotoxy(0,2);
+               lcd_gotoxy(12,3);
                
-               //lcd_puts("P1 M");
-               //lcd_putint1(motor);
+               lcd_puts("P1 M");
+               lcd_putint1(motor);
+               lcd_putc('*');
+               lcd_putint(anschlagstatus);
+
 
                STEPPERPORT_1 |= (1<<(MA_EN + motor)); // Motor 0 ODER 1 OFF // andere Richtung kommt anschliessend von master
                
                if (anschlagstatus &(1<< END_A0)) // Anschlag von Motor A               
                {
-                  //lcd_gotoxy(6,3);
-                  //lcd_puts("A0");
-                  //StepCounterA=0; 
-                  //StepCounterB=0; 
-                  //   deltafastdirectionB = 0;
-                  //  deltaslowdirectionB = 0;
+                  lcd_gotoxy(6,3);
+                  lcd_puts("A0");
+                  StepCounterA=0; 
+                  lcd_gotoxy(10,2);
+                  uint16_t ax = (CNCDaten[0][1] << 8) | CNCDaten[0][0];
+                  lcd_putint12(ax);
+                  lcd_putc('*');
+ 
+                  
+                  CNCDaten[0][0] = 0;// schritteaxl
+                  CNCDaten[0][1] = 0;// schritteaxh
+                  CNCDaten[0][4] = 0;// delayaxl
+                  CNCDaten[0][5] = 0;// delayaxh
+                  
+                  AbschnittLaden_bres(CNCDaten[0]);
+                  
+                  
+                  //deltafastdirectionB = deltafastdirectionA;
+                  //deltaslowdirectionB = deltaslowdirectionA;
+                 
+                  //bres_delayB = deltafastdelayA; // aktueller delay in fastdir
+                  //bres_counterB = deltafastdirectionB; // aktueller counter fuer steps
+
+                  
+                  //deltafastdirectionA = 0;
+                  //deltaslowdirectionA = 0;
+                  
                }
                   
                   if (anschlagstatus &(1<< END_B0)) // Anschlag von Motor B, NACH Motor A
@@ -1087,6 +1104,13 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
                      //lcd_gotoxy(8,3);
                      //lcd_puts("B0");
                      //StepCounterB=0; 
+                     //StepCounterB=0; 
+                     
+                    
+                     
+                     //deltafastdirectionB = 0;
+                     //deltaslowdirectionB = 0;
+
                   }
                
                // 
@@ -1097,21 +1121,36 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
             }
             else // Stepperport 2
             {
-               //lcd_gotoxy(0,3);
-               //lcd_puts("P2 M");
-               //lcd_putint1(motor);
+               lcd_gotoxy(12,3);
+               lcd_puts("P2 M");
+               lcd_putint1(motor);
                
-
-               STEPPERPORT_2 |= (1<<(MA_EN + motor));     // Motor 2,3 OFF
-               //STEPPERPORT_1 |= (1<<(MA_EN + motor - 2)); // Paralleler Motor 0,1 OFF
+               lcd_putc('*');
+               lcd_putint(anschlagstatus);
                
-               if (anschlagstatus &(1<< END_C0)) // Anschlag von Motor C               
+               STEPPERPORT_2 |= (1<<(MC_EN + motor-2));     // Motor 2,3 OFF
+               
+               //if (anschlagstatus &(1<< (MA_EN + motor))) // Anschlag von Motor C               
                {
-                  //lcd_gotoxy(6,3);
-                  //lcd_puts("C0");
-                  //StepCounterC=0; 
+                  lcd_gotoxy(6,3);
+                  lcd_puts("C0");
+                  StepCounterC=0; 
                   //StepCounterD=0;
-                 
+                  lcd_gotoxy(0,2);
+                  uint16_t bx = (CNCDaten[0][9] << 8) | CNCDaten[0][8];
+                  lcd_putint12(bx);
+                  lcd_putc('*');
+                  
+                  
+                  CNCDaten[0][8] = 0;// schritteaxl
+                  CNCDaten[0][9] = 0;// schritteaxh
+                  CNCDaten[0][12] = 0;// delayaxl
+                  CNCDaten[0][13] = 0;// delayaxh
+                  
+                  AbschnittLaden_bres(CNCDaten[0]);
+
+                  
+                  
                }
                   
    
@@ -1248,25 +1287,7 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
       }
       
    } // richtung war auf Anschlag zu
-   /*
-   else  // richtung ist von Anschlag weg
-   {
-       if ((anschlagstatus &(1<< (END_A0 + motor))))
-      {
-         anschlagstatus &= ~(1<< (END_A0 + motor)); // Bit fuer Anschlag X0 zuruecksetzen
-    if(LCD)
-    {
-         lcd_gotoxy(12,2);
-         lcd_putc('x');
-         lcd_putc('x');
-    }
-      }
-      else
-      {
-      }
-      
-   }
-   */
+
 }
 
 
@@ -1945,13 +1966,13 @@ uint16_t count=0;
                // MARK: F0 HOME
             case 0xF0:// cncstatus fuer go_home setzen
             {
-               lcd_gotoxy(12,3);
-               lcd_puts("HOME ");
+               lcd_gotoxy(12,0);
+               lcd_puts("HOME F0");
 
                /*
                 lcd_cls();
                 
-                lcd_gotoxy(12,3);
+                lcd_gotoxy(16,0);
                 lcd_puts("HOME ");
                 
                 abschnittnummer = 0; // diff 220520
@@ -2015,7 +2036,7 @@ uint16_t count=0;
                 
                 */
                abschnittnummer = 0; // diff 220520
-               
+               cncstatus |= (1<<GO_HOME); // Bit fuer go_home setzen
                ladeposition = 0;
                endposition = 0xFFFF;
                cncstatus = 0;
@@ -2263,7 +2284,7 @@ uint16_t count=0;
          richtungstatus = 0; // neubeginn, set back
          oldrichtungstatus = 0;
          // Abschnitt 0 laden
-         uint8_t l = sizeof(CNCDaten[ladeposition]);
+   //      uint8_t l = sizeof(CNCDaten[ladeposition]);
   //       uint8_t micro = CNCDaten[ladeposition][26];
 
          // Ersten Abschnitt laden
@@ -2376,7 +2397,6 @@ uint16_t count=0;
             anschlagstatus &= ~(1<< END_C0); // Bit fuer Anschlag C0 zuruecksetzen
             lcd_gotoxy(0,3);
             lcd_puts("**");
-
 
          }         
       }
@@ -2667,7 +2687,6 @@ uint16_t count=0;
                STEPPERPORT_1 |= (1 << MA_STEP);
             }
             
-            //if (digitalReadFast(MB_STEP) == 0) //100 ns
             if ((STEPPERPORT_1 &(1 << MB_STEP)) == 0)
             {
                
@@ -2713,7 +2732,7 @@ uint16_t count=0;
       // **************************************
       if (deltafastdirectionB > 0) // Bewegung auf Seite B vorhanden
       {
-         //if(LCD)
+         if(LCD)
          {
             lcd_gotoxy(10,0);
             lcd_putc('u');
@@ -2848,6 +2867,7 @@ uint16_t count=0;
             // Wenn StepCounterA jetzt nach decrement abgelaufen und relevant: next Datenpaket abrufen
             if ((bres_counterB == 0 ) )    // relevanter counter abgelaufen
             {
+               
                lcd_gotoxy(10,2);
                lcd_puts("B=0");
 
