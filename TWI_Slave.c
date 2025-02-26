@@ -1038,7 +1038,8 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
          anschlagstatus |= (1<< (END_A0 + motor));      // Bit fuer Anschlag A0+motor setzen
          //lcd_putint(anschlagstatus);
          
-
+         sendbuffer[22] = cncstatus;
+         
          if (cncstatus & (1<<GO_HOME)) // nur eigene Seite abstellen
          {
             // ********************************* Start HOME *****************
@@ -1361,6 +1362,7 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
                lcd_gotoxy(15,1);
                lcd_puts("both");
             }
+            
             cncstatus=0;
             sendbuffer[0]=0xA5 + motor;
             sendbuffer[26] = 0;
@@ -1427,24 +1429,12 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
             }
             
             // Alles abstellen
-            /*
-            StepCounterA=0;
-            StepCounterB=0;
-            StepCounterC=0;
-            StepCounterD=0;
-            */
-            /*
-            CounterA = 0;
-            CounterB = 0;
-            CounterC = 0;
-            CounterD = 0;
-            */
-            ladeposition=0;
+             ladeposition=0;
             motorstatus=0;
              
             sendbuffer[5]=abschnittnummer;
             sendbuffer[6]=ladeposition;
-            sendbuffer[22] = cncstatus;
+            
             if(LCD)
             {
                lcd_gotoxy(10,3);
@@ -1469,6 +1459,55 @@ void AnschlagVonMotor(const uint8_t motor) // Schlitten ist am Anschlag
    } // richtung war auf Anschlag zu
 
 }
+
+void HALT(void)
+{
+   uint8_t i=0, k=0;
+   for (k=0;k<RINGBUFFERTIEFE;k++)
+   {
+      for(i=0;i<USB_DATENBREITE;i++)
+      {
+         CNCDaten[k][i]=0;  
+      }
+   }
+
+   ringbufferstatus = 0;
+   motorstatus=0;
+   anschlagstatus = 0;
+   
+   cncstatus = 0;
+   ladeposition=0;
+   endposition=0xFFFF;
+   
+   AbschnittCounter=0;
+   PWM = 0;
+   CMD_PORT &= ~(1<<DC);
+   
+   
+   StepCounterA=0;
+   StepCounterB=0;
+   StepCounterC=0;
+   StepCounterD=0;
+   
+   CounterA=0;
+   CounterB=0;
+   CounterC=0;
+   CounterD=0;
+   
+   deltafastdirectionA = 0;
+   deltafastdirectionB = 0;
+   
+   lcd_gotoxy(16,3);
+   lcd_puts("res\0");
+   lcd_clr_line(0);
+   lcd_clr_line(1);
+   lcd_clr_line(2);
+   lcd_clr_line(3);
+
+
+}
+
+
 
 void homeset(void)
 {
@@ -3275,12 +3314,13 @@ uint16_t count=0;
          {
             //RingD2(5);
             TastenStatus |= (1<<TASTE0);
-            
+            HALT();
             Tastencount=0;
-            //lcd_gotoxy(0,1);
-            //lcd_puts("P0 \0");
-            //lcd_putint(TastenStatus);
-            //delay_ms(800);
+            lcd_gotoxy(0,1);
+            lcd_puts("P0 \0");
+            lcd_putint(TastenStatus);
+            
+            delay_ms(800);
          }
          else
          {
@@ -3297,6 +3337,7 @@ uint16_t count=0;
                Tastencount=0;
                if (TastenStatus & (1<<TASTE0))
                {
+                  HALT();
                   //sendbuffer[0]=loopcount1;
                   //sendbuffer[1]=0xAB;
                   //usbstatus |= (1<<USB_SEND);
