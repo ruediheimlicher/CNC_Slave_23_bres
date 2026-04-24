@@ -35,8 +35,8 @@ uint16_t tastaturcounter = 0;
 
 
 volatile uint8_t do_output=0;
-static volatile uint8_t buffer[32]={};
-static volatile uint8_t sendbuffer[32]={};
+static volatile uint8_t buffer[64]={};
+static volatile uint8_t sendbuffer[64]={};
 
 // begin Ringbuffer
 #define RINGBUFFERTIEFE 4
@@ -332,7 +332,6 @@ void startTimer2(void)
    TIMSK2 |= (1 << TOIE2);    // Enable OV interrupt 
    //OCR2A   = 5;             // Set CTC compare value with a prescaler of 64 
    TCCR2A = 0x00;
-   
    sei();
 }
 
@@ -461,6 +460,7 @@ void delay_ms(unsigned int ms)/* delay for a minimum of <ms> */
 	}
 }
 
+/*
 void timer0 (void) 
 { 
 // Timer fuer Exp
@@ -476,7 +476,7 @@ void timer0 (void)
 	TCNT0 = TIMER0_STARTWERT;					//RŸcksetzen des Timers
 
 }
-
+*/
 // in startTimer2 verchoben
 /*
 void timer2 (uint8_t wert) 
@@ -502,19 +502,11 @@ void timer2 (uint8_t wert)
 */
 
 volatile uint16_t timer2Counter=0; 
-
+/*
 ISR (TIMER2_OVF_vect) 
 { 
 	timer2Counter +=1;
-   /*
-   if (PWM) // Draht soll heiss sein. 
-   {
-   }
-   else
-   {
-      pwmposition =0;
-   }
-*/
+   
 	if (timer2Counter >= 14) 
 	{
        
@@ -558,7 +550,7 @@ ISR (TIMER2_OVF_vect)
 	} 
 	TCNT2 = 10;							// ergibt 2 kHz fuer Timertakt
 }
-
+*/
 /*
 ISR(TIMER2_COMP_vect) // Schaltet Impuls an SERVOPIN0 aus
 {
@@ -581,7 +573,7 @@ void tastaturaktion(uint8_t tastaturcode)
 // MARK:  AbschnittLaden_bres
 uint8_t  AbschnittLaden_bres(const uint8_t* AbschnittDaten) // 22us
 {
-   stopTimer2();
+   //stopTimer2();
  //  lcd_gotoxy(15,0);
  //  lcd_puts("    ");
    
